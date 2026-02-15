@@ -52,9 +52,14 @@ class Program
             var pkEnricher = new PrimaryKeyEnricher();
             var entityGenerator = new EntityClassGenerator();
             var fileWriter = new FileWriterService();
+            var reportWriter = new ReportWriterService();
 
             // Ensure output directory exists
             fileWriter.EnsureOutputDirectoryExists(outputDirectory);
+
+            // Collections for global tracking
+            var allDiscoveryReports = new List<ElementDiscoveryReport>();
+            var allViews = new List<ViewDefinition>();
 
 
             // Step 1: Find and read Excel file
@@ -107,6 +112,34 @@ class Program
                     {
                         result.ErrorsEncountered++;
                         continue;
+                    }
+
+                    // Generate discovery report
+                    var discoveryReport = modelXmlParser.GenerateDiscoveryReport(modelXml, server, database);
+                    allDiscoveryReports.Add(discoveryReport);
+                    ConsoleLogger.LogInfo($"[{server}].[{database}] - Discovery: {discoveryReport.StoredProcedures.Count} stored procedures, {discoveryReport.Sequences.Count} sequences, {discoveryReport.Triggers.Count} triggers");
+
+                    // Parse and generate view entities
+                    ConsoleLogger.LogInfo($"[{server}].[{database}] - Parsing views from DACPAC");
+                    var views = modelXmlParser.ParseViews(modelXml, server, database);
+                    
+                    foreach (var view in views)
+                    {
+                        var viewCode = entityGenerator.GenerateViewClass(view);
+                        if (fileWriter.WriteViewFile(outputDirectory, server, database, view.Schema, view.ViewName, viewCode))
+                        {
+                            result.ViewsGenerated++;
+                            allViews.Add(view);
+                        }
+                        else
+                        {
+                            result.ErrorsEncountered++;
+                        }
+                    }
+
+                    if (views.Count > 0)
+                    {
+                        ConsoleLogger.LogProgress($"[{server}].[{database}] - Generated {views.Count} view entities");
                     }
 
                     // Group by Schema and Table
@@ -170,19 +203,179 @@ class Program
                 }
             }
 
-            // --- After all entities are generated, output OnModelCreating body ---
-            if (allTableDefinitions.Count > 0)
+            // --- After all entities are generated, generate configuration classes and OnModelCreating body ---
+            if (allTableDefinitions.Count > 0 || allViews.Count > 0)
             {
-                var onModelCreatingBody = entityGenerator.GenerateOnModelCreatingBody(allTableDefinitions);
+                ConsoleLogger.LogInfo("");
+                ConsoleLogger.LogInfo("Generating entity configurations...");
+
+                // Group tables and views by Server/Database
+                var tablesByServerDatabase = allTableDefinitions
+                    .GroupBy(t => new { t.Server, t.Database })
+                    .ToDictionary(g => g.Key, g => g.ToList());
+
+                var viewsByServerDatabase = allViews
+                    .GroupBy(v => new { v.Server, v.Database })
+                    .ToDictionary(g => g.Key, g => g.ToList());
+
+                var serverDatabasePairs = new List<(string Server, string Database)>();
+
+                // Get all unique server/database combinations
+                var allKeys = tablesByServerDatabase.Keys
+                    .Union(viewsByServerDatabase.Keys)
+                    .Distinct()
+                    .ToList();
+
+                // Generate configuration class for each Server/Database combination
+                foreach (var key in allKeys)
+                {
+                    var server = key.Server;
+                    var database = key.Database;
+
+                    serverDatabasePairs.Add((server, database));
+
+                    // Get tables and views for this combination
+                    tablesByServerDatabase.TryGetValue(key, out var tables);
+                    viewsByServerDatabase.TryGetValue(key, out var views);
+
+                    tables ??= new List<TableDefinition>();
+                    views ??= new List<ViewDefinition>();
+
+                    // Generate configuration
+                    var configBuilder = new System.Text.StringBuilder();
+                    
+                    if (tables.Count > 0)
+                    {
+                        var configurationCode = entityGenerator.GenerateEntityConfiguration(server, database, tables);
+                        
+                        // Extract just the configuration body (without namespace/class wrapper)
+                        // We'll reconstruct it with both table and view configurations
+                        var lines = configurationCode.Split('\n');
+                        var inConfigureMethod = false;
+                        var bodyLines = new List<string>();
+                        
+                        foreach (var line in lines)
+                        {
+                            if (line.Contains("public static void Configure(ModelBuilder modelBuilder)"))
+                            {
+                                inConfigureMethod = true;
+                                continue;
+                            }
+                            
+                            if (inConfigureMethod)
+                            {
+                                if (line.Trim() == "}" && bodyLines.Count > 0)
+                                {
+                                    break;
+                                }
+                                bodyLines.Add(line);
+                            }
+                        }
+                        
+                        // Build complete configuration with both tables and views
+                        configBuilder.AppendLine("using Microsoft.EntityFrameworkCore;");
+                        configBuilder.AppendLine("using DataLayer.Core.Entities;");
+                        configBuilder.AppendLine();
+                        
+                        var serverPascal = NameConverter.ToPascalCase(server);
+                        var databasePascal = NameConverter.ToPascalCase(database);
+                        configBuilder.AppendLine($"namespace DataLayer.Core.Configuration.{serverPascal}.{databasePascal}");
+                        configBuilder.AppendLine("{");
+                        configBuilder.AppendLine($"    public static class {databasePascal}EntityConfiguration");
+                        configBuilder.AppendLine("    {");
+                        configBuilder.AppendLine("        public static void Configure(ModelBuilder modelBuilder)");
+                        configBuilder.AppendLine("        {");
+                        
+                        // Add table configurations
+                        foreach (var line in bodyLines)
+                        {
+                            configBuilder.AppendLine(line);
+                        }
+                        
+                        // Add view configurations
+                        if (views.Count > 0)
+                        {
+                            configBuilder.AppendLine();
+                            configBuilder.AppendLine("            // View Configurations");
+                            var viewConfig = entityGenerator.GenerateViewConfiguration(views, server, database);
+                            configBuilder.Append(viewConfig);
+                        }
+                        
+                        configBuilder.AppendLine("        }");
+                        configBuilder.AppendLine("    }");
+                        configBuilder.AppendLine("}");
+                        
+                        if (fileWriter.WriteConfigurationFile(outputDirectory, server, database, configBuilder.ToString()))
+                        {
+                            // Configuration file written successfully
+                        }
+                        else
+                        {
+                            result.ErrorsEncountered++;
+                        }
+                    }
+                    else if (views.Count > 0)
+                    {
+                        // Only views, no tables
+                        configBuilder.AppendLine("using Microsoft.EntityFrameworkCore;");
+                        configBuilder.AppendLine("using DataLayer.Core.Entities;");
+                        configBuilder.AppendLine();
+                        
+                        var serverPascal = NameConverter.ToPascalCase(server);
+                        var databasePascal = NameConverter.ToPascalCase(database);
+                        configBuilder.AppendLine($"namespace DataLayer.Core.Configuration.{serverPascal}.{databasePascal}");
+                        configBuilder.AppendLine("{");
+                        configBuilder.AppendLine($"    public static class {databasePascal}EntityConfiguration");
+                        configBuilder.AppendLine("    {");
+                        configBuilder.AppendLine("        public static void Configure(ModelBuilder modelBuilder)");
+                        configBuilder.AppendLine("        {");
+                        configBuilder.AppendLine("            // View Configurations");
+                        var viewConfig = entityGenerator.GenerateViewConfiguration(views, server, database);
+                        configBuilder.Append(viewConfig);
+                        configBuilder.AppendLine("        }");
+                        configBuilder.AppendLine("    }");
+                        configBuilder.AppendLine("}");
+                        
+                        if (fileWriter.WriteConfigurationFile(outputDirectory, server, database, configBuilder.ToString()))
+                        {
+                            // Configuration file written successfully
+                        }
+                        else
+                        {
+                            result.ErrorsEncountered++;
+                        }
+                    }
+                }
+
+                // Generate simplified OnModelCreating body that calls configuration methods
+                var onModelCreatingCalls = entityGenerator.GenerateOnModelCreatingCalls(serverDatabasePairs);
                 var dbContextOnModelCreatingPath = Path.Combine(outputDirectory, "DbContext.onModelCreating");
-                File.WriteAllText(dbContextOnModelCreatingPath, onModelCreatingBody);
-                ConsoleLogger.LogProgress($"Generated OnModelCreating body: ./output/DbContext.onModelCreating");
+                File.WriteAllText(dbContextOnModelCreatingPath, onModelCreatingCalls);
+                ConsoleLogger.LogProgress($"Generated OnModelCreating calls: ./output/DbContext.onModelCreating");
+            }
+
+            // Write discovery reports
+            if (allDiscoveryReports.Any())
+            {
+                ConsoleLogger.LogInfo("");
+                ConsoleLogger.LogInfo("Generating discovery reports...");
+                
+                if (reportWriter.WriteJsonReport(outputDirectory, allDiscoveryReports))
+                {
+                    ConsoleLogger.LogProgress($"Generated {allDiscoveryReports.Count} JSON discovery reports");
+                }
+                
+                if (reportWriter.WriteHtmlReport(outputDirectory, allDiscoveryReports))
+                {
+                    ConsoleLogger.LogProgress($"Generated {allDiscoveryReports.Count} HTML discovery reports");
+                }
             }
 
             // Display summary
             ConsoleLogger.LogInfo("");
             ConsoleLogger.LogInfo("=== Generation Summary ===");
             ConsoleLogger.LogProgress($"Entities generated: {result.EntitiesGenerated}");
+            ConsoleLogger.LogProgress($"Views generated: {result.ViewsGenerated}");
             
             if (result.TablesSkipped > 0)
             {

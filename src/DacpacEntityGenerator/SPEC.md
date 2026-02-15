@@ -36,6 +36,48 @@ The DACPAC Entity Generator is a code generation tool that creates Entity Framew
 4. **Explicit Configuration**: No hidden defaults; all decisions are logged
 5. **Batch Processing**: Supports multiple servers/databases in a single execution
 
+### Entity Design Pattern
+
+The generated entities follow a **surrogate key pattern**:
+
+- **BaseEntity Inheritance**: All generated entities inherit from `BaseEntity` (provided by the consuming application)
+- **Surrogate Primary Key**: `BaseEntity` typically provides an `Id` property (e.g., `int`, `long`, `Guid`) as the actual EF Core primary key
+- **Natural Keys as Unique Indexes**: The original database primary key columns are preserved in the entity but configured as unique indexes rather than EF Core keys
+- **Data Integrity**: Unique indexes on the natural key columns maintain referential integrity and enforce business constraints
+
+**Benefits**:
+- Consistent primary key across all entities
+- Simplified relationship mapping
+- Better support for audit trails and soft deletes (common in BaseEntity implementations)
+- Maintains original database constraints through unique indexes
+
+**Example**:
+```csharp
+// BaseEntity (in consuming application)
+public abstract class BaseEntity
+{
+    [Key]
+    public int Id { get; set; }
+    public DateTime CreatedDate { get; set; }
+    public DateTime? ModifiedDate { get; set; }
+}
+
+// Generated Entity
+public class Order : BaseEntity
+{
+    // Original PK columns become regular properties
+    public int OrderNumber { get; set; }
+    public string WarehouseCode { get; set; }
+    // ... other properties
+}
+
+// Generated Configuration
+modelBuilder.Entity<Order>()
+    .HasIndex(e => new { e.OrderNumber, e.WarehouseCode })
+    .IsUnique()
+    .HasDatabaseName("IX_Orders_OrderNumber_WarehouseCode");
+```
+
 ## Architecture
 
 ### High-Level Component Diagram
@@ -104,6 +146,7 @@ public class ColumnDefinition
     public bool IsFromExcel { get; set; }      // User-requested vs auto-added
     public int? Precision { get; set; }        // Decimal precision
     public int? Scale { get; set; }            // Decimal scale
+    public string? DefaultValue { get; set; }  // SQL default constraint value
 }
 ```
 
@@ -112,10 +155,32 @@ public class ColumnDefinition
 **Key Fields**:
 - `IsFromExcel`: Distinguishes user-requested columns from automatically-added PK columns
 - `Precision` / `Scale`: Essential for decimal type mapping in EF Core
+- `DefaultValue`: Captures SQL default constraint expressions (e.g., "0", "GETDATE()", "'Active'")
+
+### IndexDefinition
+
+Represents a database index.
+
+```csharp
+public class IndexDefinition
+{
+    public string Name { get; set; }           // Index name
+    public List<string> Columns { get; set; }  // Ordered list of column names
+    public bool IsUnique { get; set; }         // Unique constraint
+    public bool IsClustered { get; set; }      // Clustered index
+    public bool IsPrimaryKeyIndex { get; set; } // Generated from PK columns
+}
+```
+
+**Purpose**: Stores index metadata for EF Core index configuration generation.
+
+**Key Fields**:
+- `Columns`: Ordered list is important for composite indexes
+- `IsPrimaryKeyIndex`: Indicates this index was auto-generated for primary key columns (since BaseEntity provides the actual key)
 
 ### TableDefinition
 
-Represents a complete database table with all its columns.
+Represents a complete database table with all its columns and indexes.
 
 ```csharp
 public class TableDefinition
@@ -125,12 +190,15 @@ public class TableDefinition
     public string Schema { get; set; }
     public string TableName { get; set; }
     public List<ColumnDefinition> Columns { get; set; }
+    public List<IndexDefinition> Indexes { get; set; }
 }
 ```
 
 **Purpose**: Aggregates all information needed to generate a single entity class.
 
 **Usage**: One `TableDefinition` instance generates one `.cs` entity file.
+
+**Key Changes**: Now includes `Indexes` to support index-based uniqueness constraints instead of composite keys (since entities inherit from BaseEntity which provides the actual primary key).
 
 ### ExcelRow
 
@@ -254,6 +322,12 @@ Dictionary<string, Dictionary<string, List<ExcelRow>>>
 
 **XML Namespace**: `http://schemas.microsoft.com/sqlserver/dac/Serialization/2012/02`
 
+**DACPAC Format Support**:
+- **FileFormatVersion**: 1.2 (and compatible versions)
+- **SchemaVersion**: 3.5 (and compatible versions)
+- **SQL Server Versions**: 2005 (Sql90) through 2022 (Sql160) and beyond
+- **DSP Provider**: Microsoft.Data.Tools.Schema.Sql.Sql140DatabaseSchemaProvider
+
 **Key Methods**:
 
 #### `ParseTable(...)`
@@ -266,12 +340,56 @@ Main entry point for table parsing.
 
 **Algorithm**:
 1. Parse XML document
-2. Find table element by schema and name
-3. Extract all columns from table
-4. Extract primary key information
-5. Filter columns: include if (in Excel OR is PK)
-6. Mark columns with metadata flags
-7. Validate and return `TableDefinition`
+2. **Validate DACPAC format** (see `ValidateDacpacFormat`)
+3. Find table element by schema and name
+4. Extract all columns from table
+5. Extract primary key information
+6. Extract default constraints
+7. Filter columns: include if (in Excel OR is PK)
+8. Mark columns with metadata flags
+9. Apply default values where applicable
+10. **Parse existing indexes** (see `ParseIndexes`)
+11. **Ensure PK columns have an index**: If primary key columns don't have a covering index, create a unique index for them
+12. Validate and return `TableDefinition`
+
+**Architectural Note**: Entities inherit from `BaseEntity` which provides the actual primary key (typically an `Id` property). The original database primary key columns are preserved but configured as unique indexes rather than EF Core keys, maintaining data integrity while allowing the surrogate key pattern.
+
+#### `ValidateDacpacFormat(XDocument doc, string server, string database)`
+**New in current version**: Validates DACPAC file format and structure.
+
+**Validations Performed**:
+1. **Root Element**: Confirms `DataSchemaModel` exists
+2. **Namespace**: Validates or warns about namespace mismatch
+3. **Model Element**: Ensures `Model` element is present
+4. **Format Attributes**: Logs FileFormatVersion and SchemaVersion
+
+**SQL Server Version Detection**:
+Extracts SQL Server version from `DspName` attribute:
+```
+Microsoft.Data.Tools.Schema.Sql.Sql140DatabaseSchemaProvider
+                                  ^^^
+                            Version code: 140 = SQL Server 2017
+```
+
+**Version Mapping**:
+| Code | SQL Server Version |
+|------|-------------------|
+| 90   | SQL Server 2005   |
+| 100  | SQL Server 2008   |
+| 110  | SQL Server 2012   |
+| 120  | SQL Server 2014   |
+| 130  | SQL Server 2016   |
+| 140  | SQL Server 2017   |
+| 150  | SQL Server 2019   |
+| 160  | SQL Server 2022   |
+
+**Return Value**: `bool` - true if DACPAC is valid, false if critical errors found
+
+**Error Handling**:
+- Missing root element → Error, returns false
+- Wrong root element name → Error, returns false
+- Namespace mismatch → Warning, continues processing
+- Missing Model element → Error, returns false
 
 #### `FindTableElement(XDocument doc, string schema, string tableName)`
 Locates the table in XML structure:
@@ -285,12 +403,22 @@ Locates the table in XML structure:
 - `Type` attribute = `"SqlTable"`
 - `Name` attribute = `"[{schema}].[{tableName}]"`
 
+**Enhanced Error Detection**:
+- Logs warning if no `SqlTable` elements exist in DACPAC
+- Helps identify format incompatibilities
+
+**Return Value**: `XElement?` - Table element or null if not found
+
 #### `ParseColumns(XElement tableElement)`
 Extracts column definitions from table element.
 
+**Supported Column Types**:
+- `SqlSimpleColumn`: Standard table columns
+- `SqlComputedColumn`: Computed/calculated columns
+
 **XML Structure Handling** (two patterns supported):
 
-**Pattern 1: SQL Server 2017+ DACPAC**
+**Pattern 1: SQL Server 2017+ DACPAC (Current Format)**
 ```xml
 <Relationship Name="Columns">
   <Entry>
@@ -303,7 +431,7 @@ Extracts column definitions from table element.
 </Relationship>
 ```
 
-**Pattern 2: Legacy DACPAC**
+**Pattern 2: Legacy DACPAC (Pre-2017)**
 ```xml
 <Relationship Name="Columns">
   <Entry>
@@ -312,20 +440,87 @@ Extracts column definitions from table element.
 </Relationship>
 ```
 
+**Enhanced Error Detection**:
+- Logs warning if no 'Columns' relationship found
+- Handles both embedded and referenced column definitions
+- Gracefully skips malformed entries
+
+**Return Value**: `List<ColumnDefinition>` - All columns found in table
+
 #### `ParseColumnProperties(XElement columnElement, string columnName)`
-Extracts metadata from column's property elements:
+Extracts metadata from column's property elements.
+
+**Property Value Extraction** (Enhanced):
+Supports two XML patterns for property values:
+
+1. **Value Attribute** (Simple values):
+```xml
+<Property Name="IsNullable" Value="False" />
+```
+
+2. **Value Element** (Complex values, CDATA):
+```xml
+<Property Name="DefaultExpressionScript">
+  <Value><![CDATA[((0))]]></Value>
+</Property>
+```
+
+**Property Mapping Table**:
 
 | XML Property | Mapped To | Notes |
 |--------------|-----------|-------|
-| SqlDataType | SqlType | Base type (e.g., "nvarchar") |
+| SqlDataType | SqlType | Base type (e.g., "nvarchar") - from direct properties |
 | IsNullable | IsNullable | Boolean |
-| Length | MaxLength | For string/binary types |
+| Length | MaxLength | For string/binary types - from direct properties |
 | IsIdentity | IsIdentity | AUTO_INCREMENT |
-| Precision | Precision | For decimal types |
-| Scale | Scale | For decimal types |
+| Precision | Precision | For decimal types - from direct properties |
+| Scale | Scale | For decimal types - from direct properties |
 
-**Type Construction**: Appends length to type string:
+**TypeSpecifier Relationship** (SQL Server 2017+ Format):
+The newer DACPAC format uses a nested `TypeSpecifier` element containing:
+
+```xml
+<Relationship Name="TypeSpecifier">
+  <Entry>
+    <Element Type="SqlTypeSpecifier">
+      <Property Name="Length" Value="50" />
+      <Property Name="Precision" Value="18" />
+      <Property Name="Scale" Value="2" />
+      <Relationship Name="Type">
+        <Entry>
+          <References Name="[nvarchar]" />
+        </Entry>
+      </Relationship>
+    </Element>
+  </Entry>
+</Relationship>
+```
+
+**Type Information Priority**:
+1. TypeSpecifier properties (newer format) override direct properties
+2. Direct properties used as fallback (older format)
+3. Default values used if neither available
+
+**Type Construction**: Appends length/precision to type string:
 - `nvarchar` + `Length=50` → `nvarchar(50)`
+- `decimal` + `Precision=18, Scale=2` → `decimal(18,2)`
+
+**Case-Insensitive Property Matching**: Property names compared without case sensitivity for robustness.
+
+**Return Value**: `ColumnDefinition` with all available metadata populated
+
+#### `FindColumnElement(XDocument doc, string columnFullName)`
+**New in current version**: Enhanced to support multiple column types.
+
+**Supported Column Types**:
+- `SqlSimpleColumn`: Standard columns
+- `SqlComputedColumn`: Computed columns
+
+**Search Strategy**: Finds first element matching:
+- `Type` attribute in supported types list
+- `Name` attribute = columnFullName
+
+**Return Value**: `XElement?` - Column element or null if not found
 
 #### `ParsePrimaryKey(XDocument doc, string schema, string tableName)`
 Identifies primary key columns.
@@ -360,6 +555,47 @@ Identifies primary key columns.
 ```
 
 **Composite Key Support**: Returns all columns if multiple PK columns exist.
+
+**Note**: Primary key columns are marked in `ColumnDefinition.IsPrimaryKey` but do NOT generate `HasKey()` configurations, as entities inherit from `BaseEntity` which provides the actual primary key. Instead, indexes are created for PK columns to maintain uniqueness.
+
+#### `ParseIndexes(XDocument doc, string schema, string tableName)`
+**New in current version**: Extracts all indexes defined on the table.
+
+**Algorithm**:
+1. Find all `SqlIndex` elements
+2. Check if index belongs to target table (via `IndexedObject` relationship)
+3. Parse index properties (IsUnique, IsClustered)
+4. Extract column references from `ColumnSpecifications` relationship (maintains order)
+5. Parse column names from references
+6. Return list of `IndexDefinition` objects
+
+**XML Structure**:
+```xml
+<Element Type="SqlIndex" Name="[dbo].[IX_Users_Email]">
+  <Property Name="IsUnique" Value="True" />
+  <Property Name="IsClustered" Value="False" />
+  <Relationship Name="IndexedObject">
+    <Entry>
+      <References Name="[dbo].[Users]" />
+    </Entry>
+  </Relationship>
+  <Relationship Name="ColumnSpecifications">
+    <Entry>
+      <Element Type="SqlIndexedColumnSpecification">
+        <Relationship Name="Column">
+          <Entry>
+            <References Name="[dbo].[Users].[Email]" />
+          </Entry>
+        </Relationship>
+      </Element>
+    </Entry>
+  </Relationship>
+</Element>
+```
+
+**Return Value**: `List<IndexDefinition>` - All indexes found for the table
+
+**Post-Processing**: After parsing existing indexes, `ParseTable` ensures that primary key columns have a corresponding unique index. If no index exists covering the PK columns, one is auto-generated with `IsPrimaryKeyIndex = true`.
 
 ### PrimaryKeyEnricher
 
@@ -419,14 +655,12 @@ namespace DataLayer.Core.Entities.{Server}.{Database}
 2. Check for property name conflicts
 3. If conflict: append "Entity" to class name
 
-**Composite Key Detection**:
-```csharp
-var pkColumns = table.Columns.Where(c => c.IsPrimaryKey).ToList();
-bool isCompositeKey = pkColumns.Count > 1;
-```
+**Primary Key Column Handling**:
+- Primary key columns from the database are included as regular properties
+- No `[Key]` attribute is applied (BaseEntity provides the actual key)
+- Unique indexes are generated for PK columns in `OnModelCreating` configuration
 
-- Single PK: No `[Key]` attribute (uses EF Core convention)
-- Composite PK: Configuration in `OnModelCreating`
+**Historical Note**: Previously, composite keys were configured using `HasKey()`. This has been replaced with unique index generation to support the BaseEntity surrogate key pattern.
 
 #### `GenerateProperty(StringBuilder sb, ColumnDefinition column, bool forceRequired)`
 Generates a single property with attributes.
@@ -481,15 +715,42 @@ Generates EF Core configuration code.
 
 **Generated Code Patterns**:
 
-**Single Primary Key**:
+**Entity Registration** (All entities):
 ```csharp
 modelBuilder.Entity<Core.Entities.Server.Database.ClassName>();
 ```
 
-**Composite Primary Key**:
+**Note**: No `HasKey()` configuration is generated. Entities inherit from `BaseEntity` which provides the actual primary key (typically an `Id` property). The original database primary key columns are configured as unique indexes instead.
+
+**Single Column Index**:
 ```csharp
 modelBuilder.Entity<Core.Entities.Server.Database.ClassName>()
-    .HasKey(e => new { e.Column1, e.Column2 });
+    .HasIndex(e => e.Email)
+    .IsUnique()
+    .HasDatabaseName("IX_Users_Email");
+```
+
+**Composite Index**:
+```csharp
+modelBuilder.Entity<Core.Entities.Server.Database.ClassName>()
+    .HasIndex(e => new { e.FirstName, e.LastName })
+    .IsUnique()
+    .HasDatabaseName("IX_Users_FirstName_LastName");
+```
+
+**Non-Unique Index**:
+```csharp
+modelBuilder.Entity<Core.Entities.Server.Database.ClassName>()
+    .HasIndex(e => e.Status)
+    .HasDatabaseName("IX_Orders_Status");
+```
+
+**Primary Key as Unique Index** (Auto-generated when PK columns detected):
+```csharp
+modelBuilder.Entity<Core.Entities.Server.Database.ClassName>()
+    .HasIndex(e => new { e.OrderId, e.LineNumber })
+    .IsUnique()
+    .HasDatabaseName("IX_OrderDetails_OrderId_LineNumber");
 ```
 
 **Decimal Precision**:
@@ -497,6 +758,21 @@ modelBuilder.Entity<Core.Entities.Server.Database.ClassName>()
 modelBuilder.Entity<Core.Entities.Server.Database.ClassName>()
     .Property(e => e.Amount)
     .HasColumnType("decimal(18,2)");
+```
+
+**Default Value**:
+```csharp
+modelBuilder.Entity<Core.Entities.Server.Database.ClassName>()
+    .Property(e => e.IsActive)
+    .HasDefaultValueSql("1");
+```
+
+**Combined Configuration** (Decimal with Default):
+```csharp
+modelBuilder.Entity<Core.Entities.Server.Database.ClassName>()
+    .Property(e => e.Amount)
+    .HasColumnType("decimal(18,2)")
+    .HasDefaultValueSql("0");
 ```
 
 **Purpose**: Output is written to `DbContext.onModelCreating` file for manual integration.
@@ -789,7 +1065,8 @@ Dictionary<Server, Dictionary<Database, List<ExcelRow>>>
 **Output Format**:
 ```csharp
 modelBuilder.Entity<Core.Entities.Server1.Database1.Table1>();
-modelBuilder.Entity<Core.Entities.Server1.Database1.Table2>().HasKey(e => new { e.Key1, e.Key2 });
+modelBuilder.Entity<Core.Entities.Server1.Database1.Table1>().HasIndex(e => e.Email).IsUnique().HasDatabaseName("IX_Table1_Email");
+modelBuilder.Entity<Core.Entities.Server1.Database1.Table2>().HasIndex(e => new { e.Key1, e.Key2 }).IsUnique().HasDatabaseName("IX_Table2_Key1_Key2");
 modelBuilder.Entity<Core.Entities.Server2.Database1.Table1>().Property(e => e.Amount).HasColumnType("decimal(18,2)");
 ```
 

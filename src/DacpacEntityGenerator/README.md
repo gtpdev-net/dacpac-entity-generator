@@ -16,18 +16,48 @@ This tool streamlines the process of creating Entity Framework Core entities by:
 
 - **Excel-Driven Generation**: Control which tables and columns to generate using a simple Excel spreadsheet
 - **DACPAC Schema Extraction**: Extracts accurate schema information directly from DACPAC files
+  - Supports FileFormatVersion 1.2 and SchemaVersion 3.5
+  - Compatible with SQL Server 2005 through 2022 (and beyond)
+  - Validates DACPAC structure and logs format information
+  - Auto-detects SQL Server version from DACPAC metadata
 - **Smart Type Mapping**: Automatically maps SQL Server data types to appropriate C# types
 - **Primary Key Detection**: Identifies and properly configures single and composite primary keys
+- **Default Constraint Support**: Captures SQL default values from DACPAC schema
 - **Naming Conventions**: Converts SQL naming conventions to C# PascalCase
 - **Multiple Database Support**: Process multiple servers and databases in a single execution
 - **EF Core Configuration**: Generates `OnModelCreating` configuration for Entity Framework Core
 - **Comprehensive Logging**: Color-coded console output tracks progress and issues
+  - Logs DACPAC format version and SQL Server target version
+  - Detailed error messages for troubleshooting
 
 ## Prerequisites
 
 - .NET 8.0 SDK
 - SQL Server DACPAC files for your databases
 - Excel file (.xlsx) with table and column specifications
+
+## DACPAC Format Requirements
+
+This tool is compatible with DACPAC files from SQL Server 2005 through SQL Server 2022 (and beyond).
+
+**Supported DACPAC Specifications**:
+- **FileFormatVersion**: 1.2 (primary), with backward compatibility
+- **SchemaVersion**: 3.5 (primary), with backward compatibility
+- **XML Namespace**: http://schemas.microsoft.com/sqlserver/dac/Serialization/2012/02
+
+**SQL Server Version Compatibility**:
+| SQL Server Version | Version Code | Status |
+|--------------------|--------------|--------|
+| SQL Server 2005    | Sql90        | ✓ Supported |
+| SQL Server 2008    | Sql100       | ✓ Supported |
+| SQL Server 2012    | Sql110       | ✓ Supported |
+| SQL Server 2014    | Sql120       | ✓ Supported |
+| SQL Server 2016    | Sql130       | ✓ Supported |
+| SQL Server 2017    | Sql140       | ✓ Supported |
+| SQL Server 2019    | Sql150       | ✓ Supported |
+| SQL Server 2022    | Sql160       | ✓ Supported |
+
+The tool automatically detects and logs the SQL Server version from DACPAC metadata during processing.
 
 ## Input Requirements
 
@@ -220,6 +250,18 @@ Check that:
 - DACPAC files are in `_input/dacpacs/`
 - File names follow the pattern: `{Server}_{Database}.dacpac`
 - Server and Database names in Excel match DACPAC file names
+
+### "Invalid DACPAC: No root element found" or "Expected root element 'DataSchemaModel'"
+The DACPAC file may be corrupted or not a valid DACPAC format. Try:
+- Re-exporting the DACPAC from SQL Server
+- Verifying the file opens correctly as a ZIP archive
+- Checking that `model.xml` exists inside the DACPAC
+
+### "DACPAC namespace mismatch"
+The tool expects the namespace `http://schemas.microsoft.com/sqlserver/dac/Serialization/2012/02`. A mismatch generates a warning but processing continues. If you experience issues, the DACPAC may be using an incompatible format version.
+
+### "No SqlTable elements found in DACPAC"
+The DACPAC may be using a different format or schema structure. This tool expects standard SQL Server DACPAC format with `SqlTable` elements.
 
 ### "No rows matched the filter criteria"
 Verify that your Excel file has rows where:
