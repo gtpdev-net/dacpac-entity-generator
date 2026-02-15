@@ -285,8 +285,10 @@ public class EntityClassGenerator
                 // Add default value configuration
                 if (!string.IsNullOrEmpty(column.DefaultValue))
                 {
-                    // Escape double quotes in the default value
-                    var escapedDefault = column.DefaultValue.Replace("\"", "\\\"");
+                    // Escape backslashes first, then double quotes
+                    var escapedDefault = column.DefaultValue
+                        .Replace("\\", "\\\\")
+                        .Replace("\"", "\\\"");
                     configurations.Add($"HasDefaultValueSql(\"{escapedDefault}\")");
                 }
                 
@@ -474,8 +476,10 @@ public class EntityClassGenerator
                 // Add default value configuration
                 if (!string.IsNullOrEmpty(column.DefaultValue) && !column.IsComputed)
                 {
-                    // Escape double quotes in the default value
-                    var escapedDefault = column.DefaultValue.Replace("\"", "\\\"");
+                    // Escape backslashes first, then double quotes
+                    var escapedDefault = column.DefaultValue
+                        .Replace("\\", "\\\\")
+                        .Replace("\"", "\\\"");
                     configurations.Add($"HasDefaultValueSql(\"{escapedDefault}\")");
                 }
                 

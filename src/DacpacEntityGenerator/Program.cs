@@ -250,8 +250,10 @@ class Program
                         
                         // Extract just the configuration body (without namespace/class wrapper)
                         // We'll reconstruct it with both table and view configurations
-                        var lines = configurationCode.Split('\n');
+                        // Split on all possible line endings to ensure cross-platform compatibility
+                        var lines = configurationCode.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
                         var inConfigureMethod = false;
+                        var skipNextBrace = false;
                         var bodyLines = new List<string>();
                         
                         foreach (var line in lines)
@@ -259,16 +261,25 @@ class Program
                             if (line.Contains("public static void Configure(ModelBuilder modelBuilder)"))
                             {
                                 inConfigureMethod = true;
+                                skipNextBrace = true;
                                 continue;
                             }
                             
                             if (inConfigureMethod)
                             {
+                                // Skip the opening brace right after method signature
+                                if (skipNextBrace && line.Trim() == "{")
+                                {
+                                    skipNextBrace = false;
+                                    continue;
+                                }
+                                
                                 if (line.Trim() == "}" && bodyLines.Count > 0)
                                 {
                                     break;
                                 }
-                                bodyLines.Add(line);
+                                // Don't add the trailing line ending - AppendLine will add it
+                                bodyLines.Add(line.TrimEnd());
                             }
                         }
                         
@@ -368,6 +379,11 @@ class Program
                 if (reportWriter.WriteHtmlReport(outputDirectory, allDiscoveryReports))
                 {
                     ConsoleLogger.LogProgress($"Generated {allDiscoveryReports.Count} HTML discovery reports");
+                }
+                
+                if (reportWriter.WriteIndexHtml(outputDirectory, allDiscoveryReports))
+                {
+                    ConsoleLogger.LogProgress("Generated discovery reports index page");
                 }
             }
 
