@@ -204,7 +204,4 @@ class Program
             Environment.Exit(1);
         }
     }
-
-    // --- Collect all TableDefinitions for OnModelCreating generation ---
-    public static List<TableDefinition> AllTableDefinitions { get; private set; }
 }

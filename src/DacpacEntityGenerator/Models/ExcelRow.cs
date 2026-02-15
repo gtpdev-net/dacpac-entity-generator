@@ -9,4 +9,5 @@ public class ExcelRow
     public string Column { get; set; } = string.Empty;
     public bool TableInDaoAnalysis { get; set; }
     public string PersistenceType { get; set; } = string.Empty;
+    public bool AddedByAPI { get; set; }
 }

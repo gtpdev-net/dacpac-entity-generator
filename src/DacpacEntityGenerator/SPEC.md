@@ -75,8 +75,6 @@ DacpacEntityGenerator/
 │   ├── ConsoleLogger.cs               # Colored console output
 │   ├── SqlTypeMapper.cs               # SQL to C# type mapping
 │   └── NameConverter.cs               # Naming convention conversion
-└── DataLayer/
-    └── GeneratedDbContext.cs          # Template DbContext
 
 ```
 
