@@ -54,14 +54,16 @@ public class ModelXmlParserService
             // Get default constraints
             var defaultConstraints = ParseDefaultConstraints(doc, schema, tableName);
 
-            // Process columns: include those in Excel filter plus all PK columns
+            // Process columns: include those in Excel filter plus all PK columns plus DatabaseId and ParentID
             foreach (var column in allColumns)
             {
                 var isPrimaryKey = primaryKeyColumns.Contains(column.Name, StringComparer.OrdinalIgnoreCase);
                 var isRequiredByExcel = requiredColumns.Contains(column.Name, StringComparer.OrdinalIgnoreCase);
+                var isDatabaseId = column.Name.Equals("DatabaseId", StringComparison.OrdinalIgnoreCase);
+                var isParentId = column.Name.Equals("ParentID", StringComparison.OrdinalIgnoreCase);
 
-                // Include if it's required by Excel OR if it's a primary key
-                if (isRequiredByExcel || isPrimaryKey)
+                // Include if it's required by Excel OR if it's a primary key OR if it's DatabaseId OR if it's ParentID
+                if (isRequiredByExcel || isPrimaryKey || isDatabaseId || isParentId)
                 {
                     column.IsPrimaryKey = isPrimaryKey;
                     column.IsFromExcel = isRequiredByExcel;
