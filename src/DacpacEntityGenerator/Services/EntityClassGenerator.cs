@@ -95,6 +95,11 @@ public class EntityClassGenerator
         var propertyName = NameConverter.ToPascalCase(column.Name);
         var csharpType = SqlTypeMapper.MapToCSharpType(column.SqlType, column.IsNullable, out bool needsMaxLength);
 
+        // Check if this is a bool property with a default value (requires special handling)
+        var isBoolWithDefault = column.SqlType.Split('(')[0].Trim().Equals("bit", StringComparison.OrdinalIgnoreCase) 
+                                && !string.IsNullOrEmpty(column.DefaultValue)
+                                && !column.IsComputed;
+
         // Add SQL default value comment if exists
         if (!string.IsNullOrEmpty(column.DefaultValue))
         {
@@ -144,6 +149,24 @@ public class EntityClassGenerator
             }
         }
 
+        // Special handling for bool properties with default values
+        if (isBoolWithDefault)
+        {
+            // Determine the default value (true or false)
+            // Safe to use ! because isBoolWithDefault already checks DefaultValue is not null or empty
+            var defaultValue = DetermineDefaultBoolValue(column.DefaultValue!);
+            var backingFieldName = $"_{char.ToLower(propertyName[0])}{propertyName.Substring(1)}";
+            
+            // Generate property with backing field pattern
+            sb.AppendLine($"        public bool {propertyName}");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            get => {backingFieldName} ?? {defaultValue.ToString().ToLower()};");
+            sb.AppendLine($"            set => {backingFieldName} = value;");
+            sb.AppendLine("        }");
+            sb.AppendLine($"        private bool? {backingFieldName};");
+            return;
+        }
+
         // Property declaration
         string modifier = string.Empty;
         string initializer = string.Empty;
@@ -175,6 +198,24 @@ public class EntityClassGenerator
         }
         
         sb.AppendLine($"        public {modifier}{csharpType} {propertyName} {{ get; set; }}{initializer}");
+    }
+
+    private bool DetermineDefaultBoolValue(string defaultValue)
+    {
+        // Parse SQL default values like ((0)), ((1)), (0), (1), '0', '1', etc.
+        if (string.IsNullOrEmpty(defaultValue))
+        {
+            return false;
+        }
+        
+        // Remove parentheses and quotes
+        var cleanValue = defaultValue.Trim()
+            .TrimStart('(').TrimEnd(')')
+            .TrimStart('(').TrimEnd(')')
+            .Trim('\'', '"', ' ');
+        
+        // Check if it's 1 or true
+        return cleanValue == "1" || cleanValue.Equals("true", StringComparison.OrdinalIgnoreCase);
     }
 
     public bool ValidateEntityClass(TableDefinition table)
