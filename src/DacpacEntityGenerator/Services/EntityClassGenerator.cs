@@ -487,16 +487,8 @@ public class EntityClassGenerator
             {
                 var toEntity = $"Core.Entities.{serverPascal}.{databasePascal}.{NameConverter.ToPascalCase(fk.ToTable)}";
                 
-                string fkConfig;
-                if (fk.FromColumns.Count == 1)
-                {
-                    fkConfig = $"modelBuilder.Entity<{fqn}>().HasOne<{toEntity}>().WithMany().HasForeignKey(e => e.{NameConverter.ToPascalCase(fk.FromColumns[0])})";
-                }
-                else
-                {
-                    var fromProps = string.Join(", ", fk.FromColumns.Select(c => $"e.{NameConverter.ToPascalCase(c)}"));
-                    fkConfig = $"modelBuilder.Entity<{fqn}>().HasOne<{toEntity}>().WithMany().HasForeignKey(e => new {{ {fromProps} }})";
-                }
+                // Always use UniqueId for foreign key relationships
+                string fkConfig = $"modelBuilder.Entity<{fqn}>().HasOne<{toEntity}>().WithMany().HasForeignKey(e => e.UniqueId)";
                 
                 if (fk.OnDeleteCascade)
                 {
