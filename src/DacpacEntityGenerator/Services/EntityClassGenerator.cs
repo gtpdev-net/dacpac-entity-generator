@@ -85,6 +85,12 @@ public class EntityClassGenerator
                                 && !string.IsNullOrEmpty(column.DefaultValue)
                                 && !column.IsComputed;
 
+        // Check if this is a datetime property with default value of 0 (requires correction)
+        var isDateTimeWithZeroDefault = (sqlBaseType == "datetime" || sqlBaseType == "datetime2" || sqlBaseType == "date" || sqlBaseType == "smalldatetime")
+                                        && !string.IsNullOrEmpty(column.DefaultValue)
+                                        && !column.IsComputed
+                                        && DetermineDefaultIntValue(column.DefaultValue) == 0;
+
         // Add SQL default value comment if exists
         if (!string.IsNullOrEmpty(column.DefaultValue))
         {
@@ -173,6 +179,22 @@ public class EntityClassGenerator
                 sb.AppendLine($"        private {csharpBaseType}? {backingFieldName};");
                 return;
             }
+        }
+
+        // Special handling for datetime properties with default value of 0 (invalid for datetime2)
+        if (isDateTimeWithZeroDefault)
+        {
+            var backingFieldName = GenerateBackingFieldName(propertyName);
+            var csharpBaseType = csharpType.TrimEnd('?'); // Remove nullable marker if present
+            
+            // Generate property with backing field pattern using DateTime.MinValue instead of 0
+            sb.AppendLine($"        public {csharpBaseType} {propertyName}");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            get => {backingFieldName} ?? DateTime.MinValue;   // Returns DateTime.MinValue when null (database default is invalid 0)");
+            sb.AppendLine($"            set => {backingFieldName} = value;");
+            sb.AppendLine("        }");
+            sb.AppendLine($"        private {csharpBaseType}? {backingFieldName};");
+            return;
         }
 
         // Property declaration
@@ -490,6 +512,26 @@ public class EntityClassGenerator
                 
                 var configurations = new List<string>();
                 
+                // Check if this property uses a backing field pattern (bool, int, or datetime with default value)
+                var sqlBaseType = column.SqlType.Split('(')[0].Trim().ToLower();
+                var usesBoolBackingField = sqlBaseType == "bit" 
+                                          && !string.IsNullOrEmpty(column.DefaultValue)
+                                          && !column.IsComputed;
+                var usesIntBackingField = (sqlBaseType == "int" || sqlBaseType == "smallint" || sqlBaseType == "tinyint" || sqlBaseType == "bigint")
+                                          && !string.IsNullOrEmpty(column.DefaultValue)
+                                          && !column.IsComputed;
+                var usesDateTimeBackingField = (sqlBaseType == "datetime" || sqlBaseType == "datetime2" || sqlBaseType == "date" || sqlBaseType == "smalldatetime")
+                                               && !string.IsNullOrEmpty(column.DefaultValue)
+                                               && !column.IsComputed
+                                               && DetermineDefaultIntValue(column.DefaultValue) == 0;
+                
+                // Add backing field configuration if applicable
+                if (usesBoolBackingField || usesIntBackingField || usesDateTimeBackingField)
+                {
+                    var backingFieldName = GenerateBackingFieldName(propertyName);
+                    configurations.Add($"HasField(\"{backingFieldName}\")");
+                }
+                
                 // Add decimal configuration
                 if (csharpType == "decimal" || csharpType == "decimal?")
                 {
@@ -526,11 +568,15 @@ public class EntityClassGenerator
                 // Add default value configuration
                 if (!string.IsNullOrEmpty(column.DefaultValue) && !column.IsComputed)
                 {
-                    // Escape backslashes first, then double quotes
-                    var escapedDefault = column.DefaultValue
-                        .Replace("\\", "\\\\")
-                        .Replace("\"", "\\\"");
-                    configurations.Add($"HasDefaultValueSql(\"{escapedDefault}\")");
+                    // Skip HasDefaultValueSql for datetime columns with default value of 0 (handled by backing field)
+                    if (!usesDateTimeBackingField)
+                    {
+                        // Escape backslashes first, then double quotes
+                        var escapedDefault = column.DefaultValue
+                            .Replace("\\", "\\\\")
+                            .Replace("\"", "\\\"");
+                        configurations.Add($"HasDefaultValueSql(\"{escapedDefault}\")");
+                    }
                 }
                 
                 // Output the configuration if there are any
