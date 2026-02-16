@@ -53,6 +53,7 @@ class Program
             var entityGenerator = new EntityClassGenerator();
             var fileWriter = new FileWriterService();
             var reportWriter = new ReportWriterService();
+            var dbContextGenerator = new DbContextGenerator();
 
             // Ensure output directory exists
             fileWriter.EnsureOutputDirectoryExists(outputDirectory);
@@ -377,6 +378,21 @@ class Program
                 var dbContextOnModelCreatingPath = Path.Combine(outputDirectory, "DbContext.onModelCreating");
                 File.WriteAllText(dbContextOnModelCreatingPath, onModelCreatingCalls);
                 ConsoleLogger.LogProgress($"Generated OnModelCreating calls: ./output/DbContext.onModelCreating");
+
+                // Generate complete DacpacDbContext class
+                ConsoleLogger.LogInfo("");
+                ConsoleLogger.LogInfo("Generating DacpacDbContext...");
+                var dbContextCode = dbContextGenerator.GenerateDacpacDbContext(allTableDefinitions, allViews, serverDatabasePairs);
+                if (fileWriter.WriteDbContextFile(outputDirectory, dbContextCode))
+                {
+                    // DbContext generated successfully
+                }
+                else
+                {
+                    var errorMsg = "Failed to write DacpacDbContext file";
+                    result.Errors.Add(errorMsg);
+                    result.ErrorsEncountered++;
+                }
             }
 
             // Write discovery reports

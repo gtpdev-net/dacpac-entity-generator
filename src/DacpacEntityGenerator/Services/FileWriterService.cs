@@ -134,4 +134,33 @@ public class FileWriterService
             return false;
         }
     }
+
+    public bool WriteDbContextFile(
+        string outputDirectory,
+        string dbContextCode)
+    {
+        try
+        {
+            // Create output directory structure: ./output/
+            Directory.CreateDirectory(outputDirectory);
+
+            // Generate filename: DacpacDbContext.cs
+            var fileName = "DacpacDbContext.cs";
+            var filePath = Path.Combine(outputDirectory, fileName);
+
+            // Write file with UTF-8 encoding
+            File.WriteAllText(filePath, dbContextCode, Encoding.UTF8);
+
+            // Get relative path for logging
+            var relativePath = Path.GetRelativePath(outputDirectory, filePath);
+            ConsoleLogger.LogProgress($"Generated DbContext: ./output/{relativePath.Replace('\\', '/')}");
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ConsoleLogger.LogError($"Failed to write DbContext file: {ex.Message}");
+            return false;
+        }
+    }
 }

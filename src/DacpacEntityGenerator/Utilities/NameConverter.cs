@@ -63,4 +63,87 @@ public static class NameConverter
 
         return sanitized;
     }
+
+    public static string Pluralize(string word)
+    {
+        if (string.IsNullOrWhiteSpace(word))
+            return word;
+
+        // Common irregular plurals
+        var irregulars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "Person", "People" },
+            { "Man", "Men" },
+            { "Woman", "Women" },
+            { "Child", "Children" },
+            { "Tooth", "Teeth" },
+            { "Foot", "Feet" },
+            { "Mouse", "Mice" },
+            { "Goose", "Geese" },
+            { "Ox", "Oxen" },
+            { "Datum", "Data" },
+            { "Medium", "Media" },
+            { "Analysis", "Analyses" },
+            { "Diagnosis", "Diagnoses" },
+            { "Oasis", "Oases" },
+            { "Thesis", "Theses" },
+            { "Crisis", "Crises" },
+            { "Phenomenon", "Phenomena" },
+            { "Criterion", "Criteria" },
+            { "Index", "Indices" }
+        };
+
+        // Check for irregular plurals
+        if (irregulars.TryGetValue(word, out var irregular))
+            return irregular;
+
+        // Uncountable nouns (same in plural form)
+        var uncountables = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "Equipment", "Information", "Money", "Species", "Series", "Fish", "Sheep", "Deer",
+            "Moose", "Swine", "Buffalo", "Shrimp", "Trout", "Offspring", "Aircraft"
+        };
+
+        if (uncountables.Contains(word))
+            return word;
+
+        // Apply standard English pluralization rules
+        // Words ending in 'y' preceded by consonant: change y to ies
+        if (word.Length >= 2 && word.EndsWith("y", StringComparison.OrdinalIgnoreCase) && 
+            !"aeiou".Contains(word[^2].ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            return word.Substring(0, word.Length - 1) + "ies";
+        }
+
+        // Words ending in 's', 'ss', 'sh', 'ch', 'x', 'z': add es
+        if (word.EndsWith("s", StringComparison.OrdinalIgnoreCase) ||
+            word.EndsWith("ss", StringComparison.OrdinalIgnoreCase) ||
+            word.EndsWith("sh", StringComparison.OrdinalIgnoreCase) ||
+            word.EndsWith("ch", StringComparison.OrdinalIgnoreCase) ||
+            word.EndsWith("x", StringComparison.OrdinalIgnoreCase) ||
+            word.EndsWith("z", StringComparison.OrdinalIgnoreCase))
+        {
+            return word + "es";
+        }
+
+        // Words ending in 'f' or 'fe': change to ves
+        if (word.EndsWith("f", StringComparison.OrdinalIgnoreCase))
+        {
+            return word.Substring(0, word.Length - 1) + "ves";
+        }
+        if (word.EndsWith("fe", StringComparison.OrdinalIgnoreCase))
+        {
+            return word.Substring(0, word.Length - 2) + "ves";
+        }
+
+        // Words ending in 'o' preceded by consonant: typically add es
+        if (word.Length >= 2 && word.EndsWith("o", StringComparison.OrdinalIgnoreCase) && 
+            !"aeiou".Contains(word[^2].ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            return word + "es";
+        }
+
+        // Default: just add 's'
+        return word + "s";
+    }
 }
