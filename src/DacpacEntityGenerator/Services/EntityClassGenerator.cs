@@ -156,11 +156,12 @@ public class EntityClassGenerator
             // Safe to use ! because isBoolWithDefault already checks DefaultValue is not null or empty
             var defaultValue = DetermineDefaultBoolValue(column.DefaultValue!);
             var backingFieldName = $"_{char.ToLower(propertyName[0])}{propertyName.Substring(1)}";
+            var defaultText = defaultValue ? "TRUE" : "FALSE";
             
             // Generate property with backing field pattern
             sb.AppendLine($"        public bool {propertyName}");
             sb.AppendLine("        {");
-            sb.AppendLine($"            get => {backingFieldName} ?? {defaultValue.ToString().ToLower()};");
+            sb.AppendLine($"            get => {backingFieldName} ?? {defaultValue.ToString().ToLower()};   // Returns {defaultText} when null (database default)");
             sb.AppendLine($"            set => {backingFieldName} = value;");
             sb.AppendLine("        }");
             sb.AppendLine($"        private bool? {backingFieldName};");
