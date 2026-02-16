@@ -156,21 +156,19 @@ public class EntityClassGenerator
                 // Nullable string or computed
                 csharpType = "string?";
             }
-            else if (!string.IsNullOrEmpty(column.DefaultValue))
-            {
-                // Non-nullable string with default value - make it nullable so EF can use DB default
-                csharpType = "string?";
-            }
             else
             {
-                // Non-nullable string without default - use 'required'
-                modifier = "required ";
+                // Non-nullable string - use 'required' if no default value
+                if (string.IsNullOrEmpty(column.DefaultValue))
+                {
+                    modifier = "required ";
+                }
             }
         }
         else
         {
-            // For value types with defaults, make them nullable so null triggers the DB default
-            if ((!string.IsNullOrEmpty(column.DefaultValue) || column.IsComputed) && !column.IsNullable && !csharpType.EndsWith("?"))
+            // For value types, only make nullable if the column is nullable or computed
+            if ((column.IsNullable || column.IsComputed) && !csharpType.EndsWith("?"))
             {
                 csharpType += "?";
             }
