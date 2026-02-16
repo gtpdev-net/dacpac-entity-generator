@@ -100,6 +100,13 @@ public class EntityClassGenerator
                                 && !string.IsNullOrEmpty(column.DefaultValue)
                                 && !column.IsComputed;
 
+        // Check if this is an int property with a default value (requires special handling)
+        var sqlBaseType = column.SqlType.Split('(')[0].Trim().ToLower();
+        var isIntWithDefault = (sqlBaseType == "int" || sqlBaseType == "smallint" || sqlBaseType == "tinyint" || sqlBaseType == "bigint")
+                                && !string.IsNullOrEmpty(column.DefaultValue)
+                                && !column.IsComputed
+                                && !column.IsNullable;
+
         // Add SQL default value comment if exists
         if (!string.IsNullOrEmpty(column.DefaultValue))
         {
@@ -168,6 +175,28 @@ public class EntityClassGenerator
             return;
         }
 
+        // Special handling for int properties with default values
+        if (isIntWithDefault)
+        {
+            // Determine the default value
+            // Safe to use ! because isIntWithDefault already checks DefaultValue is not null or empty
+            var defaultValue = DetermineDefaultIntValue(column.DefaultValue!);
+            if (defaultValue.HasValue)
+            {
+                var backingFieldName = $"_{char.ToLower(propertyName[0])}{propertyName.Substring(1)}";
+                var csharpBaseType = csharpType.TrimEnd('?'); // Remove nullable marker if present
+                
+                // Generate property with backing field pattern
+                sb.AppendLine($"        public {csharpBaseType} {propertyName}");
+                sb.AppendLine("        {");
+                sb.AppendLine($"            get => {backingFieldName} ?? {defaultValue.Value};   // Returns {defaultValue.Value} when null (database default)");
+                sb.AppendLine($"            set => {backingFieldName} = value;");
+                sb.AppendLine("        }");
+                sb.AppendLine($"        private {csharpBaseType}? {backingFieldName};");
+                return;
+            }
+        }
+
         // Property declaration
         string modifier = string.Empty;
         string initializer = string.Empty;
@@ -217,6 +246,29 @@ public class EntityClassGenerator
         
         // Check if it's 1 or true
         return cleanValue == "1" || cleanValue.Equals("true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private long? DetermineDefaultIntValue(string defaultValue)
+    {
+        // Parse SQL default values like ((0)), ((5)), (100), '-1', etc.
+        if (string.IsNullOrEmpty(defaultValue))
+        {
+            return null;
+        }
+        
+        // Remove parentheses and quotes
+        var cleanValue = defaultValue.Trim()
+            .TrimStart('(').TrimEnd(')')
+            .TrimStart('(').TrimEnd(')')
+            .Trim('\'', '"', ' ');
+        
+        // Try to parse as long (covers all int types)
+        if (long.TryParse(cleanValue, out var result))
+        {
+            return result;
+        }
+        
+        return null;
     }
 
     public bool ValidateEntityClass(TableDefinition table)
