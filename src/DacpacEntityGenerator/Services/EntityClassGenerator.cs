@@ -104,8 +104,7 @@ public class EntityClassGenerator
         var sqlBaseType = column.SqlType.Split('(')[0].Trim().ToLower();
         var isIntWithDefault = (sqlBaseType == "int" || sqlBaseType == "smallint" || sqlBaseType == "tinyint" || sqlBaseType == "bigint")
                                 && !string.IsNullOrEmpty(column.DefaultValue)
-                                && !column.IsComputed
-                                && !column.IsNullable;
+                                && !column.IsComputed;
 
         // Add SQL default value comment if exists
         if (!string.IsNullOrEmpty(column.DefaultValue))
