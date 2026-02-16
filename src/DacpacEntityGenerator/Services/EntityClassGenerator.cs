@@ -161,7 +161,7 @@ public class EntityClassGenerator
             // Determine the default value (true or false)
             // Safe to use ! because isBoolWithDefault already checks DefaultValue is not null or empty
             var defaultValue = DetermineDefaultBoolValue(column.DefaultValue!);
-            var backingFieldName = $"_{char.ToLower(propertyName[0])}{propertyName.Substring(1)}";
+            var backingFieldName = GenerateBackingFieldName(propertyName);
             var defaultText = defaultValue ? "TRUE" : "FALSE";
             
             // Generate property with backing field pattern
@@ -182,7 +182,7 @@ public class EntityClassGenerator
             var defaultValue = DetermineDefaultIntValue(column.DefaultValue!);
             if (defaultValue.HasValue)
             {
-                var backingFieldName = $"_{char.ToLower(propertyName[0])}{propertyName.Substring(1)}";
+                var backingFieldName = GenerateBackingFieldName(propertyName);
                 var csharpBaseType = csharpType.TrimEnd('?'); // Remove nullable marker if present
                 
                 // Generate property with backing field pattern
@@ -227,6 +227,15 @@ public class EntityClassGenerator
         }
         
         sb.AppendLine($"        public {modifier}{csharpType} {propertyName} {{ get; set; }}{initializer}");
+    }
+
+    private string GenerateBackingFieldName(string propertyName)
+    {
+        // Remove @ prefix if present (C# keyword escaping)
+        var cleanPropertyName = propertyName.TrimStart('@');
+        
+        // Convert to camelCase
+        return $"_{char.ToLower(cleanPropertyName[0])}{cleanPropertyName.Substring(1)}";
     }
 
     private bool DetermineDefaultBoolValue(string defaultValue)
