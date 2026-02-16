@@ -60,27 +60,6 @@ public class EntityClassGenerator
             GenerateProperty(sb, column, forceRequired: !isCompositeKey && column.IsPrimaryKey);
         }
 
-        // Navigation Properties
-        if (table.ForeignKeys.Count > 0)
-        {
-            sb.AppendLine();
-            sb.AppendLine("        // Navigation Properties");
-            
-            foreach (var fk in table.ForeignKeys)
-            {
-                var navPropertyName = NameConverter.ToPascalCase(fk.ToTable);
-                var navPropertyType = $"{NameConverter.ToPascalCase(fk.ToTable)}";
-                
-                // If it's a self-reference, suffix with the FK column name to avoid collision
-                if (fk.ToTable.Equals(table.TableName, StringComparison.OrdinalIgnoreCase))
-                {
-                    navPropertyName = NameConverter.ToPascalCase(fk.FromColumns.FirstOrDefault() ?? "Related");
-                }
-                
-                sb.AppendLine($"        public virtual {navPropertyType}? {navPropertyName} {{ get; set; }}");
-            }
-        }
-
         // Close class
         sb.AppendLine("    }");
 
@@ -480,27 +459,6 @@ public class EntityClassGenerator
                 {
                     sb.AppendLine($"            // Note: Index '{index.Name}' has included columns or DESC sort order - configure in migrations");
                 }
-            }
-
-            // Add foreign key configurations
-            foreach (var fk in table.ForeignKeys)
-            {
-                var toEntity = $"Core.Entities.{serverPascal}.{databasePascal}.{NameConverter.ToPascalCase(fk.ToTable)}";
-                
-                // Always use UniqueId for foreign key relationships
-                string fkConfig = $"modelBuilder.Entity<{fqn}>().HasOne<{toEntity}>().WithMany().HasForeignKey(e => e.UniqueId)";
-                
-                if (fk.OnDeleteCascade)
-                {
-                    fkConfig += ".OnDelete(DeleteBehavior.Cascade)";
-                }
-                else
-                {
-                    fkConfig += ".OnDelete(DeleteBehavior.Restrict)";
-                }
-                
-                fkConfig += $".HasConstraintName(\"{fk.Name}\");";
-                sb.AppendLine($"            {fkConfig}");
             }
 
             // Add check constraints
