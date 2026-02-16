@@ -101,7 +101,9 @@ class Program
                     // Check if DACPAC exists
                     if (!dacpacExtractor.DacpacExists(inputDirectory, server, database))
                     {
-                        ConsoleLogger.LogError($"DACPAC file not found: {server}_{database}.dacpac");
+                        var errorMsg = $"DACPAC file not found: {server}_{database}.dacpac";
+                        ConsoleLogger.LogError(errorMsg);
+                        result.Errors.Add(errorMsg);
                         result.ErrorsEncountered++;
                         continue;
                     }
@@ -110,6 +112,8 @@ class Program
                     var modelXml = dacpacExtractor.ExtractModelXml(inputDirectory, server, database);
                     if (modelXml == null)
                     {
+                        var errorMsg = $"Failed to extract model.xml from DACPAC: {server}_{database}.dacpac";
+                        result.Errors.Add(errorMsg);
                         result.ErrorsEncountered++;
                         continue;
                     }
@@ -133,6 +137,8 @@ class Program
                         }
                         else
                         {
+                            var errorMsg = $"Failed to write view file: [{server}].[{database}].[{view.Schema}].[{view.ViewName}]";
+                            result.Errors.Add(errorMsg);
                             result.ErrorsEncountered++;
                         }
                     }
@@ -177,6 +183,8 @@ class Program
                         // Validate entity class can be generated
                         if (!entityGenerator.ValidateEntityClass(tableDefinition))
                         {
+                            var errorMsg = $"Failed validation for entity class: [{server}].[{database}].[{schema}].[{tableName}]";
+                            result.Errors.Add(errorMsg);
                             result.TablesSkipped++;
                             result.ErrorsEncountered++;
                             continue;
@@ -192,6 +200,8 @@ class Program
                         }
                         else
                         {
+                            var errorMsg = $"Failed to write entity file: [{server}].[{database}].[{schema}].[{tableName}]";
+                            result.Errors.Add(errorMsg);
                             result.ErrorsEncountered++;
                         }
 
@@ -322,6 +332,8 @@ class Program
                         }
                         else
                         {
+                            var errorMsg = $"Failed to write configuration file: [{server}].[{database}]";
+                            result.Errors.Add(errorMsg);
                             result.ErrorsEncountered++;
                         }
                     }
@@ -353,6 +365,8 @@ class Program
                         }
                         else
                         {
+                            var errorMsg = $"Failed to write configuration file: [{server}].[{database}]";
+                            result.Errors.Add(errorMsg);
                             result.ErrorsEncountered++;
                         }
                     }
@@ -401,6 +415,12 @@ class Program
             if (result.ErrorsEncountered > 0)
             {
                 ConsoleLogger.LogError($"Errors encountered: {result.ErrorsEncountered}");
+                ConsoleLogger.LogInfo("");
+                ConsoleLogger.LogInfo("Error details:");
+                foreach (var error in result.Errors)
+                {
+                    ConsoleLogger.LogError($"  - {error}");
+                }
             }
 
             ConsoleLogger.LogInfo("");
