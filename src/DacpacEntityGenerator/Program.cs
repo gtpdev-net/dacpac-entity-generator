@@ -380,17 +380,17 @@ class Program
                 File.WriteAllText(dbContextOnModelCreatingPath, onModelCreatingCalls);
                 ConsoleLogger.LogProgress($"Generated OnModelCreating calls: ./output/DbContext.onModelCreating");
 
-                // Generate complete DacpacDbContext class
+                // Generate complete SQLDbContext class
                 ConsoleLogger.LogInfo("");
-                ConsoleLogger.LogInfo("Generating DacpacDbContext...");
-                var dbContextCode = dbContextGenerator.GenerateDacpacDbContext(allTableDefinitions, allViews, serverDatabasePairs);
+                ConsoleLogger.LogInfo("Generating SQLDbContext...");
+                var dbContextCode = dbContextGenerator.GenerateSQLDbContext(allTableDefinitions, allViews, serverDatabasePairs);
                 if (fileWriter.WriteDbContextFile(outputDirectory, dbContextCode))
                 {
                     // DbContext generated successfully
                 }
                 else
                 {
-                    var errorMsg = "Failed to write DacpacDbContext file";
+                    var errorMsg = "Failed to write SQLDbContext file";
                     result.Errors.Add(errorMsg);
                     result.ErrorsEncountered++;
                 }

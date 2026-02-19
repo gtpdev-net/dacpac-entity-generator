@@ -144,8 +144,8 @@ public class FileWriterService
             // Create output directory structure: ./output/
             Directory.CreateDirectory(outputDirectory);
 
-            // Generate filename: DacpacDbContext.cs
-            var fileName = "DacpacDbContext.cs";
+            // Generate filename: SQLDbContext.cs
+            var fileName = "SQLDbContext.cs";
             var filePath = Path.Combine(outputDirectory, fileName);
 
             // Write file with UTF-8 encoding

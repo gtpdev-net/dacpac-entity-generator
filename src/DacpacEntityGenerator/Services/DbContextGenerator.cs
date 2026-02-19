@@ -6,7 +6,7 @@ namespace DacpacEntityGenerator.Services;
 
 public class DbContextGenerator
 {
-    public string GenerateDacpacDbContext(
+    public string GenerateSQLDbContext(
         List<TableDefinition> allTables,
         List<ViewDefinition> allViews,
         List<(string Server, string Database)> serverDatabasePairs)
