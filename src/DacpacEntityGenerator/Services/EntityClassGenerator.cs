@@ -75,20 +75,26 @@ public class EntityClassGenerator
         var csharpType = SqlTypeMapper.MapToCSharpType(column.SqlType, column.IsNullable, out bool needsMaxLength);
 
         // Check if this is a bool property with a default value (requires special handling)
-        var isBoolWithDefault = column.SqlType.Split('(')[0].Trim().Equals("bit", StringComparison.OrdinalIgnoreCase) 
+        // Only use backing field pattern for non-nullable columns with defaults
+        var isBoolWithDefault = column.SqlType.Split('(')[0].Trim().Equals("bit", StringComparison.OrdinalIgnoreCase)
                                 && !string.IsNullOrEmpty(column.DefaultValue)
-                                && !column.IsComputed;
+                                && !column.IsComputed
+                                && !column.IsNullable; // Only for non-nullable columns
 
         // Check if this is an int property with a default value (requires special handling)
+        // Only use backing field pattern for non-nullable columns with defaults
         var sqlBaseType = column.SqlType.Split('(')[0].Trim().ToLower();
         var isIntWithDefault = (sqlBaseType == "int" || sqlBaseType == "smallint" || sqlBaseType == "tinyint" || sqlBaseType == "bigint")
                                 && !string.IsNullOrEmpty(column.DefaultValue)
-                                && !column.IsComputed;
+                                && !column.IsComputed
+                                && !column.IsNullable; // Only for non-nullable columns
 
         // Check if this is a datetime property with default value of 0 (requires correction)
+        // Only use backing field pattern for non-nullable columns with defaults
         var isDateTimeWithZeroDefault = (sqlBaseType == "datetime" || sqlBaseType == "datetime2" || sqlBaseType == "date" || sqlBaseType == "smalldatetime")
                                         && !string.IsNullOrEmpty(column.DefaultValue)
                                         && !column.IsComputed
+                                        && !column.IsNullable // Only for non-nullable columns
                                         && DetermineDefaultIntValue(column.DefaultValue) == 0;
 
         // Add SQL default value comment if exists
@@ -148,9 +154,12 @@ public class EntityClassGenerator
             var defaultValue = DetermineDefaultBoolValue(column.DefaultValue!);
             var backingFieldName = GenerateBackingFieldName(propertyName);
             var defaultText = defaultValue ? "TRUE" : "FALSE";
-            
+
+            // Respect nullability: use csharpType which already has ? if nullable
+            var propertyType = column.IsNullable ? "bool?" : "bool";
+
             // Generate property with backing field pattern
-            sb.AppendLine($"        public bool {propertyName}");
+            sb.AppendLine($"        public {propertyType} {propertyName}");
             sb.AppendLine("        {");
             sb.AppendLine($"            get => {backingFieldName} ?? {defaultValue.ToString().ToLower()};   // Returns {defaultText} when null (database default)");
             sb.AppendLine($"            set => {backingFieldName} = value;");
@@ -169,9 +178,12 @@ public class EntityClassGenerator
             {
                 var backingFieldName = GenerateBackingFieldName(propertyName);
                 var csharpBaseType = csharpType.TrimEnd('?'); // Remove nullable marker if present
-                
+
+                // Respect nullability: use csharpType which already has ? if nullable
+                var propertyType = column.IsNullable ? $"{csharpBaseType}?" : csharpBaseType;
+
                 // Generate property with backing field pattern
-                sb.AppendLine($"        public {csharpBaseType} {propertyName}");
+                sb.AppendLine($"        public {propertyType} {propertyName}");
                 sb.AppendLine("        {");
                 sb.AppendLine($"            get => {backingFieldName} ?? {defaultValue.Value};   // Returns {defaultValue.Value} when null (database default)");
                 sb.AppendLine($"            set => {backingFieldName} = value;");
@@ -186,9 +198,12 @@ public class EntityClassGenerator
         {
             var backingFieldName = GenerateBackingFieldName(propertyName);
             var csharpBaseType = csharpType.TrimEnd('?'); // Remove nullable marker if present
-            
+
+            // Respect nullability: use csharpType which already has ? if nullable
+            var propertyType = column.IsNullable ? $"{csharpBaseType}?" : csharpBaseType;
+
             // Generate property with backing field pattern using DateTime.MinValue instead of 0
-            sb.AppendLine($"        public {csharpBaseType} {propertyName}");
+            sb.AppendLine($"        public {propertyType} {propertyName}");
             sb.AppendLine("        {");
             sb.AppendLine($"            get => {backingFieldName} ?? DateTime.MinValue;   // Returns DateTime.MinValue when null (database default is invalid 0)");
             sb.AppendLine($"            set => {backingFieldName} = value;");
@@ -200,7 +215,7 @@ public class EntityClassGenerator
         // Property declaration
         string modifier = string.Empty;
         string initializer = string.Empty;
-        
+
         // Handle string properties
         if (csharpType == "string")
         {
@@ -226,7 +241,7 @@ public class EntityClassGenerator
                 csharpType += "?";
             }
         }
-        
+
         sb.AppendLine($"        public {modifier}{csharpType} {propertyName} {{ get; set; }}{initializer}");
     }
 
@@ -234,7 +249,7 @@ public class EntityClassGenerator
     {
         // Remove @ prefix if present (C# keyword escaping)
         var cleanPropertyName = propertyName.TrimStart('@');
-        
+
         // Convert to camelCase
         return $"_{char.ToLower(cleanPropertyName[0])}{cleanPropertyName.Substring(1)}";
     }
@@ -246,13 +261,13 @@ public class EntityClassGenerator
         {
             return false;
         }
-        
+
         // Remove parentheses and quotes
         var cleanValue = defaultValue.Trim()
             .TrimStart('(').TrimEnd(')')
             .TrimStart('(').TrimEnd(')')
             .Trim('\'', '"', ' ');
-        
+
         // Check if it's 1 or true
         return cleanValue == "1" || cleanValue.Equals("true", StringComparison.OrdinalIgnoreCase);
     }
@@ -264,19 +279,19 @@ public class EntityClassGenerator
         {
             return null;
         }
-        
+
         // Remove parentheses and quotes
         var cleanValue = defaultValue.Trim()
             .TrimStart('(').TrimEnd(')')
             .TrimStart('(').TrimEnd(')')
             .Trim('\'', '"', ' ');
-        
+
         // Try to parse as long (covers all int types)
         if (long.TryParse(cleanValue, out var result))
         {
             return result;
         }
-        
+
         return null;
     }
 
@@ -335,28 +350,28 @@ public class EntityClassGenerator
             foreach (var index in table.Indexes)
             {
                 var indexColumns = string.Join(", ", index.Columns.Select(c => $"e.{NameConverter.ToPascalCase(c)}"));
-                
+
                 if (index.Columns.Count == 1)
                 {
                     var indexConfig = $"modelBuilder.Entity<{fqn}>().HasIndex(e => e.{NameConverter.ToPascalCase(index.Columns[0])})";
-                    
+
                     if (index.IsUnique)
                     {
                         indexConfig += ".IsUnique()";
                     }
-                    
+
                     indexConfig += $".HasDatabaseName(\"{index.Name}\");";
                     sb.AppendLine($"            {indexConfig}");
                 }
                 else
                 {
                     var indexConfig = $"modelBuilder.Entity<{fqn}>().HasIndex(e => new {{ {indexColumns} }})";
-                    
+
                     if (index.IsUnique)
                     {
                         indexConfig += ".IsUnique()";
                     }
-                    
+
                     indexConfig += $".HasDatabaseName(\"{index.Name}\");";
                     sb.AppendLine($"            {indexConfig}");
                 }
@@ -367,9 +382,9 @@ public class EntityClassGenerator
             {
                 var propertyName = NameConverter.ToPascalCase(column.Name);
                 var csharpType = SqlTypeMapper.MapToCSharpType(column.SqlType, column.IsNullable, out _);
-                
+
                 var configurations = new List<string>();
-                
+
                 // Add decimal configuration
                 if (csharpType == "decimal" || csharpType == "decimal?")
                 {
@@ -382,7 +397,7 @@ public class EntityClassGenerator
                         configurations.Add($"HasColumnType(\"decimal(18,2)\")");
                     }
                 }
-                
+
                 // Add default value configuration
                 if (!string.IsNullOrEmpty(column.DefaultValue))
                 {
@@ -392,7 +407,7 @@ public class EntityClassGenerator
                         .Replace("\"", "\\\"");
                     configurations.Add($"HasDefaultValueSql(\"{escapedDefault}\")");
                 }
-                
+
                 // Output the configuration if there are any
                 if (configurations.Count > 0)
                 {
@@ -450,7 +465,7 @@ public class EntityClassGenerator
             foreach (var index in table.Indexes)
             {
                 var indexColumns = string.Join(", ", index.Columns.Select(c => $"e.{NameConverter.ToPascalCase(c)}"));
-                
+
                 string indexConfig;
                 if (index.Columns.Count == 1)
                 {
@@ -460,22 +475,22 @@ public class EntityClassGenerator
                 {
                     indexConfig = $"modelBuilder.Entity<{fqn}>().HasIndex(e => new {{ {indexColumns} }})";
                 }
-                
+
                 if (index.IsUnique)
                 {
                     indexConfig += ".IsUnique()";
                 }
-                
+
                 // Add filter if present
                 if (!string.IsNullOrEmpty(index.FilterDefinition))
                 {
                     var escapedFilter = index.FilterDefinition.Replace("\"", "\\\"");
                     indexConfig += $".HasFilter(\"{escapedFilter}\")";
                 }
-                
+
                 indexConfig += $".HasDatabaseName(\"{index.Name}\");";
                 sb.AppendLine($"            {indexConfig}");
-                
+
                 // Add comment if index has features not fully supported by HasIndex
                 if (index.IncludedColumns.Any() || index.ColumnSortOrder.Any(kvp => !kvp.Value))
                 {
@@ -509,12 +524,12 @@ public class EntityClassGenerator
             {
                 var propertyName = NameConverter.ToPascalCase(column.Name);
                 var csharpType = SqlTypeMapper.MapToCSharpType(column.SqlType, column.IsNullable, out _);
-                
+
                 var configurations = new List<string>();
-                
+
                 // Check if this property uses a backing field pattern (bool, int, or datetime with default value)
                 var sqlBaseType = column.SqlType.Split('(')[0].Trim().ToLower();
-                var usesBoolBackingField = sqlBaseType == "bit" 
+                var usesBoolBackingField = sqlBaseType == "bit"
                                           && !string.IsNullOrEmpty(column.DefaultValue)
                                           && !column.IsComputed;
                 var usesIntBackingField = (sqlBaseType == "int" || sqlBaseType == "smallint" || sqlBaseType == "tinyint" || sqlBaseType == "bigint")
@@ -524,14 +539,14 @@ public class EntityClassGenerator
                                                && !string.IsNullOrEmpty(column.DefaultValue)
                                                && !column.IsComputed
                                                && DetermineDefaultIntValue(column.DefaultValue) == 0;
-                
+
                 // Add backing field configuration if applicable
                 if (usesBoolBackingField || usesIntBackingField || usesDateTimeBackingField)
                 {
                     var backingFieldName = GenerateBackingFieldName(propertyName);
                     configurations.Add($"HasField(\"{backingFieldName}\")");
                 }
-                
+
                 // Add decimal configuration
                 if (csharpType == "decimal" || csharpType == "decimal?")
                 {
@@ -544,13 +559,13 @@ public class EntityClassGenerator
                         configurations.Add($"HasColumnType(\"decimal(18,2)\")");
                     }
                 }
-                
+
                 // Add collation if non-default
                 if (!string.IsNullOrEmpty(column.Collation))
                 {
                     configurations.Add($"UseCollation(\"{column.Collation}\")");
                 }
-                
+
                 // Add computed column configuration
                 if (column.IsComputed && !string.IsNullOrEmpty(column.ComputedExpression))
                 {
@@ -564,7 +579,7 @@ public class EntityClassGenerator
                         configurations.Add($"HasComputedColumnSql(\"{escapedExpr}\")");
                     }
                 }
-                
+
                 // Add default value configuration
                 if (!string.IsNullOrEmpty(column.DefaultValue) && !column.IsComputed)
                 {
@@ -578,7 +593,7 @@ public class EntityClassGenerator
                         configurations.Add($"HasDefaultValueSql(\"{escapedDefault}\")");
                     }
                 }
-                
+
                 // Output the configuration if there are any
                 if (configurations.Count > 0)
                 {
@@ -606,16 +621,16 @@ public class EntityClassGenerator
     public string GenerateOnModelCreatingCalls(List<(string Server, string Database)> serverDatabasePairs)
     {
         var sb = new StringBuilder();
-        
+
         foreach (var (server, database) in serverDatabasePairs.OrderBy(x => x.Server).ThenBy(x => x.Database))
         {
             var serverPascal = NameConverter.ToPascalCase(server);
             var databasePascal = NameConverter.ToPascalCase(database);
             var configClass = $"DataLayer.Core.Configuration.{serverPascal}.{databasePascal}.{databasePascal}EntityConfiguration";
-            
+
             sb.AppendLine($"            {configClass}.Configure(modelBuilder);");
         }
-        
+
         return sb.ToString();
     }
 
@@ -735,7 +750,7 @@ public class EntityClassGenerator
         {
             sb.AppendLine($"        public {csharpType} {propertyName} {{ get; init; }}");
         }
-        
+
         sb.AppendLine();
     }
 
