@@ -118,13 +118,15 @@ private int? _priority;
 - ✅ Clean API - consumers only see non-nullable properties
 - ✅ Type-safe - no nullable types exposed to consumers
 
+
 ## Implementation Details
 
 The generator:
 1. Detects `bit`, `int`, `smallint`, `tinyint`, and `bigint` columns with default values
 2. Parses the SQL default to extract the appropriate value
-3. Generates the property with the appropriate backing field pattern
+3. Generates the property with the appropriate backing field pattern **only for non-nullable columns**
 4. Creates proper camelCase backing field names
+5. Only emits `.HasField()` in the configuration if the entity property uses a backing field (i.e., for non-nullable columns with defaults)
 
 **Supported Types:**
 - `bit` (bool)

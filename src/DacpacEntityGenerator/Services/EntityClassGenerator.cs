@@ -358,8 +358,8 @@ public class EntityClassGenerator
         sb.AppendLine("        public static void Configure(ModelBuilder modelBuilder)");
         sb.AppendLine("        {");
 
-        // Generate configuration for each table
-        foreach (var table in tables)
+        // Generate configuration for each table (sorted alphabetically by table name)
+        foreach (var table in tables.OrderBy(t => t.TableName))
         {
             var entityClassName = NameConverter.ToPascalCase(table.TableName);
             bool propertyNameConflict = table.Columns
@@ -437,29 +437,33 @@ public class EntityClassGenerator
             {
                 var propertyName = NameConverter.ToPascalCase(column.Name);
                 var csharpType = SqlTypeMapper.MapToCSharpType(column.SqlType, column.IsNullable, out _);
-                
+
                 var configurations = new List<string>();
-                
+
                 // Check if this property uses a backing field pattern (bool, int, or datetime with default value)
                 var sqlBaseType = column.SqlType.Split('(')[0].Trim().ToLower();
-                var usesBoolBackingField = sqlBaseType == "bit" 
+                // Only use backing field if the entity property is non-nullable (i.e., column.IsNullable == false)
+                var usesBoolBackingField = sqlBaseType == "bit"
                                           && !string.IsNullOrEmpty(column.DefaultValue)
-                                          && !column.IsComputed;
+                                          && !column.IsComputed
+                                          && !column.IsNullable;
                 var usesIntBackingField = (sqlBaseType == "int" || sqlBaseType == "smallint" || sqlBaseType == "tinyint" || sqlBaseType == "bigint")
                                           && !string.IsNullOrEmpty(column.DefaultValue)
-                                          && !column.IsComputed;
+                                          && !column.IsComputed
+                                          && !column.IsNullable;
                 var usesDateTimeBackingField = (sqlBaseType == "datetime" || sqlBaseType == "datetime2" || sqlBaseType == "date" || sqlBaseType == "smalldatetime")
                                                && !string.IsNullOrEmpty(column.DefaultValue)
                                                && !column.IsComputed
+                                               && !column.IsNullable
                                                && DetermineDefaultIntValue(column.DefaultValue) == 0;
-                
-                // Add backing field configuration if applicable
+
+                // Add backing field configuration if applicable (only for non-nullable columns)
                 if (usesBoolBackingField || usesIntBackingField || usesDateTimeBackingField)
                 {
                     var backingFieldName = GenerateBackingFieldName(propertyName);
                     configurations.Add($"HasField(\"{backingFieldName}\")");
                 }
-                
+
                 // Add decimal configuration
                 if (csharpType == "decimal" || csharpType == "decimal?")
                 {
@@ -472,13 +476,13 @@ public class EntityClassGenerator
                         configurations.Add($"HasColumnType(\"decimal(18,2)\")");
                     }
                 }
-                
+
                 // Add collation if non-default
                 if (!string.IsNullOrEmpty(column.Collation))
                 {
                     configurations.Add($"UseCollation(\"{column.Collation}\")");
                 }
-                
+
                 // Add computed column configuration
                 if (column.IsComputed && !string.IsNullOrEmpty(column.ComputedExpression))
                 {
@@ -492,7 +496,7 @@ public class EntityClassGenerator
                         configurations.Add($"HasComputedColumnSql(\"{escapedExpr}\")");
                     }
                 }
-                
+
                 // Add default value configuration
                 if (!string.IsNullOrEmpty(column.DefaultValue) && !column.IsComputed)
                 {
@@ -506,7 +510,7 @@ public class EntityClassGenerator
                         configurations.Add($"HasDefaultValueSql(\"{escapedDefault}\")");
                     }
                 }
-                
+
                 // Output the configuration if there are any
                 if (configurations.Count > 0)
                 {
