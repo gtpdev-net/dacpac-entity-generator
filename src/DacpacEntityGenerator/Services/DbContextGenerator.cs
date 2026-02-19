@@ -59,7 +59,7 @@ public class DbContextGenerator
         sb.AppendLine("{");
 
         // Class declaration
-        sb.AppendLine("    public partial class SqlDbContext(DbContextOptions<SqlDbContext> options) : BaseDbContext(options)");
+        sb.AppendLine("    public partial class SQLDbContext(DbContextOptions<SQLDbContext> options) : BaseDbContext(options)");
         sb.AppendLine("    {");
 
         // Generate DbSet properties for all tables

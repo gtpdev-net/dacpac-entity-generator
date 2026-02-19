@@ -1,6 +1,7 @@
 using ClosedXML.Excel;
 using DacpacEntityGenerator.Models;
 using DacpacEntityGenerator.Utilities;
+using DocumentFormat.OpenXml.Wordprocessing;
 
 namespace DacpacEntityGenerator.Services;
 
@@ -91,9 +92,7 @@ public class ExcelReaderService
 
             // Apply filtering
             var filteredRows = allRows
-                .Where(r => (r.TableInDaoAnalysis || r.AddedByAPI) &&
-                           (r.PersistenceType.Equals("R", StringComparison.OrdinalIgnoreCase) ||
-                            r.DevPersistenceType.Equals("R", StringComparison.OrdinalIgnoreCase)))
+                .Where(r => (r.Generate && r.DevPersistenceType.Equals("R", StringComparison.OrdinalIgnoreCase)))
                 .ToList();
 
             ConsoleLogger.LogProgress($"Filtered to {filteredRows.Count} rows (Table in DAO Analysis = TRUE, Added by API = TRUE, Persistence Type = 'R', DEV Persistence Type = 'R')");

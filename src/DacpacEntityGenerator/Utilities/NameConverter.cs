@@ -1,3 +1,4 @@
+using System.Reflection.Metadata.Ecma335;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -68,6 +69,16 @@ public static class NameConverter
     {
         if (string.IsNullOrWhiteSpace(word))
             return word;
+
+        var unchangables = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "ExternalComponentAssembly"
+        };
+
+        if (unchangables.Contains(word))
+        {
+            return word;
+        }
 
         // Common irregular plurals
         var irregulars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)

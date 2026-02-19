@@ -28,7 +28,7 @@ class Program
                 workspaceRoot = Path.GetFullPath(Path.Combine(currentDir, "..", "..", "..", "..", ".."));
             }
 
-            var projectDirectory = Path.Combine(workspaceRoot, "src\\DataLayer.DacpacEntityGenerator");
+            var projectDirectory = Path.Combine(workspaceRoot, "src\\_DacpacEntityGenerator");
             var inputDirectory = Path.Combine(projectDirectory, "_input");
             var outputDirectory = Path.Combine(projectDirectory, "_output");
 
@@ -75,7 +75,7 @@ class Program
             var filteredRows = excelReader.ReadAndFilterExcel(excelFilePath);
             if (filteredRows.Count == 0)
             {
-                ConsoleLogger.LogWarning("No rows matched the filter criteria (Table in DAO Analysis = TRUE, Persistence Type = 'R')");
+                ConsoleLogger.LogWarning("No rows matched the filter criteria");
                 Environment.Exit(0);
             }
 
@@ -373,12 +373,6 @@ class Program
                         }
                     }
                 }
-
-                // Generate simplified OnModelCreating body that calls configuration methods
-                var onModelCreatingCalls = entityGenerator.GenerateOnModelCreatingCalls(serverDatabasePairs);
-                var dbContextOnModelCreatingPath = Path.Combine(outputDirectory, "DbContext.onModelCreating");
-                File.WriteAllText(dbContextOnModelCreatingPath, onModelCreatingCalls);
-                ConsoleLogger.LogProgress($"Generated OnModelCreating calls: ./output/DbContext.onModelCreating");
 
                 // Generate complete SQLDbContext class
                 ConsoleLogger.LogInfo("");

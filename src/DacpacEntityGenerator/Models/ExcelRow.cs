@@ -10,4 +10,7 @@ public class ExcelRow
     public bool TableInDaoAnalysis { get; set; }
     public string PersistenceType { get; set; } = string.Empty;
     public bool AddedByAPI { get; set; }
+    public string DevPersistenceType { get; set; } = string.Empty;
+    public bool Generate { get; set; }
+                        
 }
