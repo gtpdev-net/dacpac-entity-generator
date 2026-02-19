@@ -152,6 +152,7 @@ class Program
                     // Group by Schema and Table
                     var tableGroups = rows
                         .GroupBy(r => new { r.Schema, r.Table })
+                        .Where(g => g.Any(r => r.Generate))
                         .ToList();
 
                     ConsoleLogger.LogInfo($"Found {tableGroups.Count} tables to process");

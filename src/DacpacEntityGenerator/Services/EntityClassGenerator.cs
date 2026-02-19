@@ -10,6 +10,8 @@ public class EntityClassGenerator
     {
         var sb = new StringBuilder();
 
+        sb.AppendLine("/* This is generated code - do not modify directly */");
+
         // Using statements
         sb.AppendLine("using System;");
         sb.AppendLine("using System.ComponentModel.DataAnnotations;");
@@ -327,102 +329,13 @@ public class EntityClassGenerator
         return true;
     }
 
-    // Generates the OnModelCreating body for a list of TableDefinitions
-    public string GenerateOnModelCreatingBody(List<TableDefinition> tables)
-    {
-        var sb = new StringBuilder();
-        foreach (var table in tables)
-        {
-            var className = NameConverter.ToPascalCase(table.TableName);
-            bool propertyNameConflict = table.Columns
-                .Select(c => NameConverter.ToPascalCase(c.Name))
-                .Any(pn => pn == className);
-            if (propertyNameConflict)
-            {
-                className += "Entity";
-            }
-            var fqn = $"Core.Entities.{table.Server}.{table.Database}.{className}";
-
-            // Register entity (BaseEntity provides the actual key)
-            sb.AppendLine($"            modelBuilder.Entity<{fqn}>();");
-
-            // Add index configurations
-            foreach (var index in table.Indexes)
-            {
-                var indexColumns = string.Join(", ", index.Columns.Select(c => $"e.{NameConverter.ToPascalCase(c)}"));
-                
-                if (index.Columns.Count == 1)
-                {
-                    var indexConfig = $"modelBuilder.Entity<{fqn}>().HasIndex(e => e.{NameConverter.ToPascalCase(index.Columns[0])})";
-                    
-                    if (index.IsUnique)
-                    {
-                        indexConfig += ".IsUnique()";
-                    }
-                    
-                    indexConfig += $".HasDatabaseName(\"{index.Name}\");";
-                    sb.AppendLine($"            {indexConfig}");
-                }
-                else
-                {
-                    var indexConfig = $"modelBuilder.Entity<{fqn}>().HasIndex(e => new {{ {indexColumns} }})";
-                    
-                    if (index.IsUnique)
-                    {
-                        indexConfig += ".IsUnique()";
-                    }
-                    
-                    indexConfig += $".HasDatabaseName(\"{index.Name}\");";
-                    sb.AppendLine($"            {indexConfig}");
-                }
-            }
-
-            // Add HasColumnType/HasPrecision for decimal columns and HasDefaultValueSql for columns with defaults
-            foreach (var column in table.Columns)
-            {
-                var propertyName = NameConverter.ToPascalCase(column.Name);
-                var csharpType = SqlTypeMapper.MapToCSharpType(column.SqlType, column.IsNullable, out _);
-                
-                var configurations = new List<string>();
-                
-                // Add decimal configuration
-                if (csharpType == "decimal" || csharpType == "decimal?")
-                {
-                    if (column.Precision.HasValue && column.Scale.HasValue)
-                    {
-                        configurations.Add($"HasColumnType(\"decimal({column.Precision},{column.Scale})\")");
-                    }
-                    else
-                    {
-                        configurations.Add($"HasColumnType(\"decimal(18,2)\")");
-                    }
-                }
-                
-                // Add default value configuration
-                if (!string.IsNullOrEmpty(column.DefaultValue))
-                {
-                    // Escape backslashes first, then double quotes
-                    var escapedDefault = column.DefaultValue
-                        .Replace("\\", "\\\\")
-                        .Replace("\"", "\\\"");
-                    configurations.Add($"HasDefaultValueSql(\"{escapedDefault}\")");
-                }
-                
-                // Output the configuration if there are any
-                if (configurations.Count > 0)
-                {
-                    var configChain = string.Join(".", configurations);
-                    sb.AppendLine($"            modelBuilder.Entity<{fqn}>().Property(e => e.{propertyName}).{configChain};");
-                }
-            }
-        }
-        return sb.ToString();
-    }
 
     // Generates a configuration class for a specific Server/Database combination
     public string GenerateEntityConfiguration(string server, string database, List<TableDefinition> tables)
     {
         var sb = new StringBuilder();
+
+        sb.AppendLine("/* This is generated code - do not modify directly */");
 
         // Using statements
         sb.AppendLine("using Microsoft.EntityFrameworkCore;");
@@ -617,22 +530,6 @@ public class EntityClassGenerator
         return sb.ToString();
     }
 
-    // Generates simplified OnModelCreating body that calls configuration classes
-    public string GenerateOnModelCreatingCalls(List<(string Server, string Database)> serverDatabasePairs)
-    {
-        var sb = new StringBuilder();
-        
-        foreach (var (server, database) in serverDatabasePairs.OrderBy(x => x.Server).ThenBy(x => x.Database))
-        {
-            var serverPascal = NameConverter.ToPascalCase(server);
-            var databasePascal = NameConverter.ToPascalCase(database);
-            var configClass = $"DataLayer.Core.Configuration.{serverPascal}.{databasePascal}.{databasePascal}EntityConfiguration";
-            
-            sb.AppendLine($"            {configClass}.Configure(modelBuilder);");
-        }
-        
-        return sb.ToString();
-    }
 
     public string GenerateViewClass(ViewDefinition view)
     {

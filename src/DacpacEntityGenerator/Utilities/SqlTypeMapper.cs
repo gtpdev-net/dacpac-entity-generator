@@ -13,7 +13,7 @@ public static class SqlTypeMapper
         { "numeric", "decimal" },
         { "money", "decimal" },
         { "smallmoney", "decimal" },
-        { "float", "double" },
+        { "float", "float" },
         { "real", "float" },
         { "char", "string" },
         { "nchar", "string" },

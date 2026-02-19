@@ -73,8 +73,10 @@ public class ExcelReaderService
                         Table = row.Cell(columnIndices["Table"]).GetString().Trim(),
                         Column = row.Cell(columnIndices["Column"]).GetString().Trim(),
                         TableInDaoAnalysis = ParseBoolean(row.Cell(columnIndices["Table in DAO Analysis"])),
+                        AddedByAPI = ParseBoolean(row.Cell(columnIndices["Added by API"])),
                         PersistenceType = row.Cell(columnIndices["Persistence Type"]).GetString().Trim(),
-                        AddedByAPI = ParseBoolean(row.Cell(columnIndices["Added by API"]))
+                        DevPersistenceType = row.Cell(columnIndices["DEV Persistence Type"]).GetString().Trim(),
+                        Generate = ParseBoolean(row.Cell(columnIndices["Generate"]))
                     };
 
                     allRows.Add(excelRow);
@@ -90,10 +92,11 @@ public class ExcelReaderService
             // Apply filtering
             var filteredRows = allRows
                 .Where(r => (r.TableInDaoAnalysis || r.AddedByAPI) &&
-                           r.PersistenceType.Equals("R", StringComparison.OrdinalIgnoreCase))
+                           (r.PersistenceType.Equals("R", StringComparison.OrdinalIgnoreCase) ||
+                            r.DevPersistenceType.Equals("R", StringComparison.OrdinalIgnoreCase)))
                 .ToList();
 
-            ConsoleLogger.LogProgress($"Filtered to {filteredRows.Count} rows (Table in DAO Analysis = TRUE, Persistence Type = 'R')");
+            ConsoleLogger.LogProgress($"Filtered to {filteredRows.Count} rows (Table in DAO Analysis = TRUE, Added by API = TRUE, Persistence Type = 'R', DEV Persistence Type = 'R')");
 
             // Group and log summary
             var serverCount = filteredRows.Select(r => r.Server).Distinct().Count();
@@ -129,7 +132,7 @@ public class ExcelReaderService
         var requiredColumns = new[] 
         { 
             "Server", "Database", "Schema", "Table", "Column", 
-            "Table in DAO Analysis", "Persistence Type" 
+            "Table in DAO Analysis", "Added by API", "Persistence Type", "DEV Persistence Type", "Generate"
         };
 
         var missingColumns = requiredColumns
@@ -139,7 +142,7 @@ public class ExcelReaderService
         if (missingColumns.Any())
         {
             ConsoleLogger.LogError($"Excel file is missing required columns: {string.Join(", ", missingColumns)}");
-            ConsoleLogger.LogError("Expected columns: Server, Database, Schema, Table, Column, Table in DAO Analysis, Persistence Type");
+            ConsoleLogger.LogError("Expected columns: Server, Database, Schema, Table, Column, Table in DAO Analysis, Added by API, Persistence Type, DEV Persistence Type, Generate");
             return false;
         }
 

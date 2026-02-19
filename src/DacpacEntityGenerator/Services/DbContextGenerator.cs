@@ -13,6 +13,8 @@ public class DbContextGenerator
     {
         var sb = new StringBuilder();
 
+        sb.AppendLine("/* This is generated code - do not modify directly */");
+
         // Generate using statements
         sb.AppendLine("using Microsoft.EntityFrameworkCore;");
         sb.AppendLine("using DataLayer.Infrastructure.Persistence.Contexts.Base;");
@@ -57,7 +59,7 @@ public class DbContextGenerator
         sb.AppendLine("{");
 
         // Class declaration
-        sb.AppendLine("    public partial class DacpacDbContext(DbContextOptions<DacpacDbContext> options) : BaseDbContext(options)");
+        sb.AppendLine("    public partial class SqlDbContext(DbContextOptions<SqlDbContext> options) : BaseDbContext(options)");
         sb.AppendLine("    {");
 
         // Generate DbSet properties for all tables
