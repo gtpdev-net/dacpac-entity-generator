@@ -49,6 +49,9 @@ public class DbContextGenerator
 
         sb.AppendLine();
 
+        // Detect naming conflicts - find entity names that appear in multiple databases
+        var conflictingNames = DetectDbSetNameConflicts(allTables, allViews);
+
         // Namespace declaration
         sb.AppendLine("namespace DataLayer.Infrastructure.Persistence.Contexts");
         sb.AppendLine("{");
@@ -89,8 +92,13 @@ public class DbContextGenerator
 
                     var fullyQualifiedType = $"{serverPascal}.{databasePascal}.{className}";
                     var pluralName = NameConverter.Pluralize(className);
+                    
+                    // Add database prefix only if there's a naming conflict
+                    var dbSetPropertyName = conflictingNames.Contains(pluralName)
+                        ? $"{databasePascal}{pluralName}"
+                        : pluralName;
 
-                    sb.AppendLine($"        public DbSet<{fullyQualifiedType}> {pluralName} {{ get; set; }} = null!;");
+                    sb.AppendLine($"        public DbSet<{fullyQualifiedType}> {dbSetPropertyName} {{ get; set; }} = null!;");
                 }
             }
         }
@@ -128,8 +136,13 @@ public class DbContextGenerator
 
                     var fullyQualifiedType = $"{serverPascal}.{databasePascal}.{className}";
                     var pluralName = NameConverter.Pluralize(className);
+                    
+                    // Add database prefix only if there's a naming conflict
+                    var dbSetPropertyName = conflictingNames.Contains(pluralName)
+                        ? $"{databasePascal}{pluralName}"
+                        : pluralName;
 
-                    sb.AppendLine($"        public DbSet<{fullyQualifiedType}> {pluralName} {{ get; set; }} = null!;");
+                    sb.AppendLine($"        public DbSet<{fullyQualifiedType}> {dbSetPropertyName} {{ get; set; }} = null!;");
                 }
             }
         }
@@ -165,5 +178,65 @@ public class DbContextGenerator
         sb.AppendLine("}");
 
         return sb.ToString();
+    }
+
+    private HashSet<string> DetectDbSetNameConflicts(
+        List<TableDefinition> allTables,
+        List<ViewDefinition> allViews)
+    {
+        // Track pluralized names and which server/database combinations they appear in
+        var nameUsages = new Dictionary<string, HashSet<(string Server, string Database)>>();
+
+        // Analyze tables
+        foreach (var table in allTables)
+        {
+            var className = NameConverter.ToPascalCase(table.TableName);
+            
+            // Check if "Entity" suffix was added
+            bool propertyNameConflict = table.Columns
+                .Select(c => NameConverter.ToPascalCase(c.Name))
+                .Any(pn => pn == className);
+            if (propertyNameConflict)
+            {
+                className += "Entity";
+            }
+
+            var pluralName = NameConverter.Pluralize(className);
+            
+            if (!nameUsages.ContainsKey(pluralName))
+            {
+                nameUsages[pluralName] = new HashSet<(string, string)>();
+            }
+            nameUsages[pluralName].Add((table.Server, table.Database));
+        }
+
+        // Analyze views
+        foreach (var view in allViews)
+        {
+            var className = NameConverter.ToPascalCase(view.ViewName);
+            
+            // Check if "View" suffix was added
+            bool propertyNameConflict = view.Columns
+                .Select(c => NameConverter.ToPascalCase(c.Name))
+                .Any(pn => pn == className);
+            if (propertyNameConflict)
+            {
+                className += "View";
+            }
+
+            var pluralName = NameConverter.Pluralize(className);
+            
+            if (!nameUsages.ContainsKey(pluralName))
+            {
+                nameUsages[pluralName] = new HashSet<(string, string)>();
+            }
+            nameUsages[pluralName].Add((view.Server, view.Database));
+        }
+
+        // Return names that appear in more than one server/database combination
+        return nameUsages
+            .Where(kvp => kvp.Value.Count > 1)
+            .Select(kvp => kvp.Key)
+            .ToHashSet();
     }
 }

@@ -101,11 +101,57 @@ public static class NameConverter
         var uncountables = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "Equipment", "Information", "Money", "Species", "Series", "Fish", "Sheep", "Deer",
-            "Moose", "Swine", "Buffalo", "Shrimp", "Trout", "Offspring", "Aircraft"
+            "Moose", "Swine", "Buffalo", "Shrimp", "Trout", "Offspring", "Aircraft", "Data"
         };
 
         if (uncountables.Contains(word))
             return word;
+
+        // Check if word appears to already be plural
+        // Words ending in common plural patterns
+        if (word.Length > 3)
+        {
+            // Words ending in "ies" (e.g., Categories, Entries)
+            if (word.EndsWith("ies", StringComparison.OrdinalIgnoreCase))
+                return word;
+            
+            // Words ending in "ves" (e.g., Knives, Wolves)
+            if (word.EndsWith("ves", StringComparison.OrdinalIgnoreCase))
+                return word;
+            
+            // Words ending in "ses" (e.g., Analyses, Cases, Processes)
+            if (word.EndsWith("ses", StringComparison.OrdinalIgnoreCase))
+                return word;
+            
+            // Words ending in "xes" (e.g., Boxes, Indexes)
+            if (word.EndsWith("xes", StringComparison.OrdinalIgnoreCase))
+                return word;
+            
+            // Words ending in "zes" (e.g., Quizzes, Prizes)
+            if (word.EndsWith("zes", StringComparison.OrdinalIgnoreCase))
+                return word;
+            
+            // Words ending in "ches" (e.g., Matches, Branches)
+            if (word.EndsWith("ches", StringComparison.OrdinalIgnoreCase))
+                return word;
+            
+            // Words ending in "shes" (e.g., Dishes, Wishes)
+            if (word.EndsWith("shes", StringComparison.OrdinalIgnoreCase))
+                return word;
+            
+            // Words ending in "oes" (e.g., Heroes, Potatoes) - but not "oes" where o comes after vowel
+            if (word.EndsWith("oes", StringComparison.OrdinalIgnoreCase) && 
+                word.Length >= 4 && !"aeiou".Contains(word[^4].ToString(), StringComparison.OrdinalIgnoreCase))
+                return word;
+            
+            // Words clearly ending in plural 's' preceded by consonant (e.g., Errors, Items, Records)
+            // But not words ending in 'ss' (e.g., Class -> Classes)
+            if (word.EndsWith("s", StringComparison.OrdinalIgnoreCase) && 
+                !word.EndsWith("ss", StringComparison.OrdinalIgnoreCase) &&
+                word.Length >= 2 &&
+                !"aeiou".Contains(word[^2].ToString(), StringComparison.OrdinalIgnoreCase))
+                return word;
+        }
 
         // Apply standard English pluralization rules
         // Words ending in 'y' preceded by consonant: change y to ies
@@ -116,8 +162,7 @@ public static class NameConverter
         }
 
         // Words ending in 's', 'ss', 'sh', 'ch', 'x', 'z': add es
-        if (word.EndsWith("s", StringComparison.OrdinalIgnoreCase) ||
-            word.EndsWith("ss", StringComparison.OrdinalIgnoreCase) ||
+        if (word.EndsWith("ss", StringComparison.OrdinalIgnoreCase) ||
             word.EndsWith("sh", StringComparison.OrdinalIgnoreCase) ||
             word.EndsWith("ch", StringComparison.OrdinalIgnoreCase) ||
             word.EndsWith("x", StringComparison.OrdinalIgnoreCase) ||
