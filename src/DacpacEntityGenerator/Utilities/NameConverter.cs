@@ -104,8 +104,19 @@ public static class NameConverter
             "Moose", "Swine", "Buffalo", "Shrimp", "Trout", "Offspring", "Aircraft", "Data"
         };
 
-        if (uncountables.Contains(word))
-            return word;
+        // Check if word ends with any uncountable word (handles compounds like "PersonalData")
+        foreach (var uncountable in uncountables)
+        {
+            if (word.EndsWith(uncountable, StringComparison.OrdinalIgnoreCase))
+                return word;
+        }
+
+        // Check if word ends with any irregular plural form (e.g., "SystemAnalyses" shouldn't become "SystemAnalyseses")
+        foreach (var pluralForm in irregulars.Values)
+        {
+            if (word.EndsWith(pluralForm, StringComparison.OrdinalIgnoreCase) && word.Length > pluralForm.Length)
+                return word;
+        }
 
         // Check if word appears to already be plural
         // Words ending in common plural patterns

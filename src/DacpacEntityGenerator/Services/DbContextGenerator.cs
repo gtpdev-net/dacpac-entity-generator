@@ -98,7 +98,7 @@ public class DbContextGenerator
                         ? $"{databasePascal}{pluralName}"
                         : pluralName;
 
-                    sb.AppendLine($"        public DbSet<{fullyQualifiedType}> {dbSetPropertyName} {{ get; set; }} = null!;");
+                    sb.AppendLine($"        public DbSet<DataLayer.Core.Entities.{fullyQualifiedType}> {dbSetPropertyName} {{ get; set; }} = null!;");
                 }
             }
         }
@@ -142,7 +142,7 @@ public class DbContextGenerator
                         ? $"{databasePascal}{pluralName}"
                         : pluralName;
 
-                    sb.AppendLine($"        public DbSet<{fullyQualifiedType}> {dbSetPropertyName} {{ get; set; }} = null!;");
+                    sb.AppendLine($"        public DbSet<DataLayer.Core.Entities.{fullyQualifiedType}> {dbSetPropertyName} {{ get; set; }} = null!;");
                 }
             }
         }
