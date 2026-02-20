@@ -12,8 +12,15 @@ This tool streamlines the process of creating Entity Framework Core entities by 
 - **DACPAC Schema Extraction**: Direct schema parsing from DACPAC files (SQL Server 2005-2022+)
 - **Smart Type Mapping**: SQL Server types → C# types with proper nullability
 - **Primary Key Detection**: Auto-detects single and composite keys
+- **View Entity Generation**: Automatically discovers and generates keyless EF Core entities for all views
+- **Foreign Key Parsing**: Extracts FK relationships from DACPAC for future navigation property support
+- **Check & Unique Constraints**: Generates `HasCheckConstraint` and `HasAlternateKey` EF Core configuration
+- **Enhanced Index Support**: Filtered indexes, included columns, composite indexes
+- **Computed Column Support**: `[DatabaseGenerated]` attribute and `HasComputedColumnSql()` configuration
+- **Default Value Handling**: Backing-field pattern prevents EF Core sentinel value warnings
 - **Multiple Database Support**: Process multiple servers/databases in one run
-- **EF Core Configuration**: Generates `OnModelCreating` code
+- **EF Core Configuration**: Generates per-database configuration classes and a complete `SQLDbContext`
+- **Discovery Reports**: JSON and HTML reports of stored procedures, triggers, sequences, and other database elements
 
 ## Quick Start
 
@@ -25,7 +32,8 @@ This tool streamlines the process of creating Entity Framework Core entities by 
 ## Documentation
 
 - **[User Guide](src/DacpacEntityGenerator/README.md)**: Complete usage instructions, troubleshooting, and examples
-- **[Technical Specification](src/DacpacEntityGenerator/SPEC.md)**: Architecture, design patterns, and implementation details
+- **[Technical Specification](src/DacpacEntityGenerator/docs/SPEC.md)**: Architecture, design patterns, and implementation details
+- **[Bool/Int Default Pattern](src/DacpacEntityGenerator/docs/BOOL_DEFAULT_EXAMPLE.md)**: Backing-field pattern for value-type properties with database defaults
 
 ## Requirements
 
@@ -57,9 +65,14 @@ dacpac-entity-generator/
 │       ├── Models/                       # Data models
 │       ├── Services/                     # Business logic
 │       ├── Utilities/                    # Helper classes
+│       ├── docs/                         # Documentation
 │       ├── _input/                       # Place input files here
 │       │   └── dacpacs/                  # DACPAC files
-│       └── _output/                      # Generated entities
+│       └── _output/                      # Generated output
+│           ├── {Server}/{Database}/      # Entity .cs files
+│           ├── Configuration/            # EF Core configuration classes
+│           ├── SQLDbContext.cs           # Generated DbContext
+│           └── DiscoveryReports/         # JSON and HTML reports
 └── README.md                             # This file
 ```
 

@@ -20,15 +20,21 @@ This tool streamlines the process of creating Entity Framework Core entities by:
   - Compatible with SQL Server 2005 through 2022 (and beyond)
   - Validates DACPAC structure and logs format information
   - Auto-detects SQL Server version from DACPAC metadata
+- **View Entity Generation**: Automatically discovers all views and generates keyless EF Core entities
 - **Smart Type Mapping**: Automatically maps SQL Server data types to appropriate C# types
-- **Primary Key Detection**: Identifies and properly configures single and composite primary keys
-- **Default Constraint Support**: Captures SQL default values from DACPAC schema
+- **Primary Key Detection**: Identifies and properly configures single and composite primary keys as unique indexes
+- **Default Constraint Support**: Captures SQL default values from DACPAC schema; uses backing-field pattern for `bool`/`int` columns to prevent EF Core sentinel value warnings
+- **Computed Column Support**: `[DatabaseGenerated]` attribute and `HasComputedColumnSql()` EF Core configuration
+- **Row Version / Concurrency Tokens**: `[Timestamp]` attribute for optimistic concurrency
+- **Foreign Key Parsing**: Extracts FK relationships from DACPAC (stored in model; navigation properties deferred)
+- **Check Constraints**: Generates `HasCheckConstraint()` EF Core configuration
+- **Unique Constraints**: Generates `HasAlternateKey()` EF Core configuration (distinct from unique indexes)
+- **Enhanced Index Features**: Filtered indexes (`HasFilter`), included columns, composite indexes
 - **Naming Conventions**: Converts SQL naming conventions to C# PascalCase
 - **Multiple Database Support**: Process multiple servers and databases in a single execution
-- **EF Core Configuration**: Generates `OnModelCreating` configuration for Entity Framework Core
+- **EF Core Configuration**: Generates per-database static configuration classes and a complete `SQLDbContext`
+- **Discovery Reports**: JSON and HTML reports documenting stored procedures, triggers, sequences, and other database elements not directly generated
 - **Comprehensive Logging**: Color-coded console output tracks progress and issues
-  - Logs DACPAC format version and SQL Server target version
-  - Detailed error messages for troubleshooting
 
 ## Prerequisites
 
@@ -132,13 +138,28 @@ _output/
 │   ├── Database1/
 │   │   ├── Users.cs
 │   │   ├── Orders.cs
-│   │   └── Products.cs
+│   │   ├── Products.cs
+│   │   └── Views/
+│   │       └── VwActiveUsers.cs
 │   └── Database2/
 │       └── Customers.cs
 ├── Server2/
 │   └── Database1/
 │       └── Inventory.cs
-└── DbContext.onModelCreating
+├── Configuration/
+│   ├── Server1/
+│   │   ├── Database1/
+│   │   │   └── Database1EntityConfiguration.cs
+│   │   └── Database2/
+│   │       └── Database2EntityConfiguration.cs
+│   └── Server2/
+│       └── Database1/
+│           └── Database1EntityConfiguration.cs
+├── SQLDbContext.cs
+└── DiscoveryReports/
+    ├── Server1_Database1_Discovery.json
+    ├── Server1_Database1_Discovery.html
+    └── index.html
 ```
 
 ### Generated Entity Example
@@ -178,15 +199,30 @@ namespace DataLayer.Core.Entities.ProductionServer.CustomerDB
 
 ### DbContext Configuration
 
-The generator creates a `DbContext.onModelCreating` file containing Entity Framework Core configuration:
+The generator creates a `SQLDbContext.cs` file and per-database `{Database}EntityConfiguration.cs` files containing Entity Framework Core configuration:
 
 ```csharp
-modelBuilder.Entity<Core.Entities.ProductionServer.CustomerDB.Users>();
-modelBuilder.Entity<Core.Entities.ProductionServer.CustomerDB.Orders>().HasKey(e => new { e.OrderId, e.LineNumber });
-modelBuilder.Entity<Core.Entities.ProductionServer.CustomerDB.AuditLog>().Property(e => e.Amount).HasColumnType("decimal(18,2)");
+// Configuration/Server1/Database1/Database1EntityConfiguration.cs
+public static class Database1EntityConfiguration
+{
+    public static void Configure(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Core.Entities.Server1.Database1.Users>();
+        modelBuilder.Entity<Core.Entities.Server1.Database1.Users>()
+            .HasIndex(e => new { e.UserId })
+            .IsUnique()
+            .HasDatabaseName("IX_Users_UserId");
+        modelBuilder.Entity<Core.Entities.Server1.Database1.AuditLog>()
+            .Property(e => e.Amount)
+            .HasColumnType("decimal(18,2)");
+        // View configuration
+        modelBuilder.Entity<Core.Entities.Server1.Database1.VwActiveUsers>()
+            .ToView("VwActiveUsers", "Database1");
+    }
+}
 ```
 
-This code should be inserted into your DbContext's `OnModelCreating` method.
+These methods are called from the generated `SQLDbContext.OnModelCreating`. The entire `SQLDbContext.cs` is ready to use in the consuming project with no manual integration required.
 
 ## Features in Detail
 
@@ -220,8 +256,10 @@ The tool maps SQL Server types to C# types:
 
 ### Primary Key Handling
 
-- **Single Primary Key**: Automatically included in entity (no explicit `[Key]` attribute needed when using EF Core configuration)
-- **Composite Primary Keys**: All key columns included, configuration generated in `DbContext.onModelCreating`
+- **Surrogate Key Pattern**: All entities inherit from `BaseEntity` which provides the actual EF Core primary key (`UniqueId`)
+- **Natural Keys as Unique Indexes**: Original database primary key columns are preserved as regular properties and configured as unique indexes
+- **Single Primary Key**: Automatically included in entity; configured as unique index in configuration class
+- **Composite Primary Keys**: All key columns included; composite unique index generated in configuration class
 - **Auto-Added Keys**: Primary key columns not listed in Excel are automatically included
 
 ### Name Conversion

@@ -104,6 +104,13 @@ DacpacEntityGenerator/
 ├── Models/                             # Data transfer objects
 │   ├── ColumnDefinition.cs            # Column metadata
 │   ├── TableDefinition.cs             # Table metadata
+│   ├── IndexDefinition.cs             # Index metadata
+│   ├── ForeignKeyDefinition.cs        # Foreign key metadata
+│   ├── ViewDefinition.cs              # View metadata
+│   ├── CheckConstraintDefinition.cs   # Check constraint metadata
+│   ├── UniqueConstraintDefinition.cs  # Unique constraint metadata
+│   ├── FunctionDefinition.cs          # User-defined function metadata
+│   ├── ElementDiscoveryReport.cs      # Discovery report model
 │   ├── ExcelRow.cs                    # Excel data row
 │   └── GenerationResult.cs            # Process results
 ├── Services/                           # Business logic
@@ -111,12 +118,23 @@ DacpacEntityGenerator/
 │   ├── DacpacExtractorService.cs      # DACPAC extraction
 │   ├── ModelXmlParserService.cs       # XML schema parsing
 │   ├── PrimaryKeyEnricher.cs          # PK metadata enrichment
-│   ├── EntityClassGenerator.cs        # C# code generation
-│   └── FileWriterService.cs           # File system operations
+│   ├── EntityClassGenerator.cs        # C# entity/view code generation
+│   ├── DbContextGenerator.cs          # SQLDbContext class generation
+│   ├── FileWriterService.cs           # File system operations
+│   └── ReportWriterService.cs         # Discovery report output
 ├── Utilities/                          # Cross-cutting concerns
 │   ├── ConsoleLogger.cs               # Colored console output
 │   ├── SqlTypeMapper.cs               # SQL to C# type mapping
 │   └── NameConverter.cs               # Naming convention conversion
+├── docs/                               # Documentation
+│   ├── SPEC.md                        # Technical specification (this file)
+│   ├── PLAN.md                        # Feature implementation plan
+│   ├── CONSOLE_APP_PLAN.md            # Console app feature plan
+│   ├── BLAZOR_CONVERSION_PLAN.md      # Future Blazor UI plan
+│   └── BOOL_DEFAULT_EXAMPLE.md        # Bool/int default value pattern
+├── _input/                             # Input files (runtime)
+│   └── dacpacs/                        # DACPAC files
+└── _output/                            # Generated output (runtime)
 
 ```
 
@@ -137,16 +155,23 @@ Represents a single database column's metadata.
 ```csharp
 public class ColumnDefinition
 {
-    public string Name { get; set; }           // Column name from database
-    public string SqlType { get; set; }        // SQL Server data type
-    public bool IsNullable { get; set; }       // NULL constraint
-    public int? MaxLength { get; set; }        // String/binary length
-    public bool IsIdentity { get; set; }       // IDENTITY specification
-    public bool IsPrimaryKey { get; set; }     // PK membership
-    public bool IsFromExcel { get; set; }      // User-requested vs auto-added
-    public int? Precision { get; set; }        // Decimal precision
-    public int? Scale { get; set; }            // Decimal scale
-    public string? DefaultValue { get; set; }  // SQL default constraint value
+    public string Name { get; set; }                  // Column name from database
+    public string SqlType { get; set; }               // SQL Server data type
+    public bool IsNullable { get; set; }              // NULL constraint
+    public int? MaxLength { get; set; }               // String/binary length
+    public bool IsIdentity { get; set; }              // IDENTITY specification
+    public bool IsPrimaryKey { get; set; }            // PK membership
+    public bool IsFromExcel { get; set; }             // User-requested vs auto-added
+    public int? Precision { get; set; }               // Decimal precision
+    public int? Scale { get; set; }                   // Decimal scale
+    public string? DefaultValue { get; set; }         // SQL default constraint value
+    public bool IsComputed { get; set; }              // Computed/calculated column
+    public bool IsComputedPersisted { get; set; }     // Persisted computed column
+    public string? ComputedExpression { get; set; }   // SQL expression for computed columns
+    public bool IsRowVersion { get; set; }            // rowversion/timestamp column
+    public bool IsConcurrencyToken { get; set; }      // Optimistic concurrency token
+    public string? Collation { get; set; }            // Non-default collation
+    public string? Description { get; set; }          // Extended property description
 }
 ```
 
@@ -156,6 +181,9 @@ public class ColumnDefinition
 - `IsFromExcel`: Distinguishes user-requested columns from automatically-added PK columns
 - `Precision` / `Scale`: Essential for decimal type mapping in EF Core
 - `DefaultValue`: Captures SQL default constraint expressions (e.g., "0", "GETDATE()", "'Active'")
+- `IsComputed` / `IsComputedPersisted` / `ComputedExpression`: Computed column support
+- `IsRowVersion` / `IsConcurrencyToken`: EF Core concurrency token configuration
+- `Collation`: Non-default collation configuration via `UseCollation()` in EF Core
 
 ### IndexDefinition
 
@@ -164,11 +192,14 @@ Represents a database index.
 ```csharp
 public class IndexDefinition
 {
-    public string Name { get; set; }           // Index name
-    public List<string> Columns { get; set; }  // Ordered list of column names
-    public bool IsUnique { get; set; }         // Unique constraint
-    public bool IsClustered { get; set; }      // Clustered index
-    public bool IsPrimaryKeyIndex { get; set; } // Generated from PK columns
+    public string Name { get; set; }                         // Index name
+    public List<string> Columns { get; set; }               // Ordered list of key column names
+    public bool IsUnique { get; set; }                      // Unique constraint
+    public bool IsClustered { get; set; }                   // Clustered index
+    public bool IsPrimaryKeyIndex { get; set; }             // Generated from PK columns
+    public List<string> IncludedColumns { get; set; }       // Non-key included columns
+    public Dictionary<string, bool> ColumnSortOrder { get; set; } // true = ASC, false = DESC
+    public string? FilterDefinition { get; set; }           // Filtered index WHERE clause
 }
 ```
 
@@ -177,28 +208,34 @@ public class IndexDefinition
 **Key Fields**:
 - `Columns`: Ordered list is important for composite indexes
 - `IsPrimaryKeyIndex`: Indicates this index was auto-generated for primary key columns (since BaseEntity provides the actual key)
+- `IncludedColumns`: Non-key columns included in index for covering scenarios
+- `FilterDefinition`: WHERE clause for filtered index (mapped to `HasFilter()` in EF Core)
+- `ColumnSortOrder`: Per-column sort direction (DESC columns require manual migration configuration)
 
 ### TableDefinition
 
-Represents a complete database table with all its columns and indexes.
+Represents a complete database table with all its columns, indexes, and constraints.
 
 ```csharp
 public class TableDefinition
 {
-    public string Server { get; set; }
-    public string Database { get; set; }
-    public string Schema { get; set; }
-    public string TableName { get; set; }
-    public List<ColumnDefinition> Columns { get; set; }
-    public List<IndexDefinition> Indexes { get; set; }
+    public string Server { get; set; } = string.Empty;
+    public string Database { get; set; } = string.Empty;
+    public string Schema { get; set; } = string.Empty;
+    public string TableName { get; set; } = string.Empty;
+    public List<ColumnDefinition> Columns { get; set; } = new();
+    public List<IndexDefinition> Indexes { get; set; } = new();
+    public List<ForeignKeyDefinition> ForeignKeys { get; set; } = new();
+    public List<CheckConstraintDefinition> CheckConstraints { get; set; } = new();
+    public List<UniqueConstraintDefinition> UniqueConstraints { get; set; } = new();
 }
 ```
 
-**Purpose**: Aggregates all information needed to generate a single entity class.
+**Purpose**: Aggregates all information needed to generate a single entity class and its EF Core configuration.
 
-**Usage**: One `TableDefinition` instance generates one `.cs` entity file.
+**Usage**: One `TableDefinition` instance generates one `.cs` entity file and contributes to the server/database configuration class.
 
-**Key Changes**: Now includes `Indexes` to support index-based uniqueness constraints instead of composite keys (since entities inherit from BaseEntity which provides the actual primary key).
+**Constraint Collections**: `ForeignKeys`, `CheckConstraints`, and `UniqueConstraints` are parsed from the DACPAC and used to generate EF Core configuration (`HasCheckConstraint`, `HasAlternateKey`).
 
 ### ExcelRow
 
@@ -207,14 +244,16 @@ Represents a single row from the Excel input file.
 ```csharp
 public class ExcelRow
 {
-    public string Server { get; set; }
-    public string Database { get; set; }
-    public string Schema { get; set; }
-    public string Table { get; set; }
-    public string Column { get; set; }
+    public string Server { get; set; } = string.Empty;
+    public string Database { get; set; } = string.Empty;
+    public string Schema { get; set; } = string.Empty;
+    public string Table { get; set; } = string.Empty;
+    public string Column { get; set; } = string.Empty;
     public bool TableInDaoAnalysis { get; set; }
-    public string PersistenceType { get; set; }
-    // Note: AddedByAPI property referenced in code but not declared
+    public string PersistenceType { get; set; } = string.Empty;
+    public bool AddedByAPI { get; set; }
+    public string DevPersistenceType { get; set; } = string.Empty;
+    public bool Generate { get; set; }
 }
 ```
 
@@ -225,6 +264,8 @@ public class ExcelRow
 (TableInDaoAnalysis == true OR AddedByAPI == true) AND PersistenceType == "R"
 ```
 
+**Note**: The `Generate` flag in combination with the group filter (`tableGroups.Where(g => g.Any(r => r.Generate))`) ensures only tables with at least one active `Generate` row are processed.
+
 ### GenerationResult
 
 Tracks the overall execution results.
@@ -233,14 +274,159 @@ Tracks the overall execution results.
 public class GenerationResult
 {
     public bool Success { get; set; }
-    public List<string> Messages { get; set; }
+    public List<string> Messages { get; set; } = new();
+    public List<string> Errors { get; set; } = new();
     public int EntitiesGenerated { get; set; }
+    public int ViewsGenerated { get; set; }
     public int TablesSkipped { get; set; }
     public int ErrorsEncountered { get; set; }
 }
 ```
 
 **Purpose**: Provides summary statistics for the generation run.
+
+**ViewsGenerated**: Count of view entities successfully generated (distinct from table entities).
+
+**Errors**: List of error message strings displayed in the summary section.
+
+### ViewDefinition
+
+Represents a database view for keyless entity generation.
+
+```csharp
+public class ViewDefinition
+{
+    public string Server { get; set; } = string.Empty;
+    public string Database { get; set; } = string.Empty;
+    public string Schema { get; set; } = string.Empty;
+    public string ViewName { get; set; } = string.Empty;
+    public List<ColumnDefinition> Columns { get; set; } = new();
+    public bool HasStandardAuditColumns { get; set; }
+}
+```
+
+**Purpose**: Stores view schema for generating keyless EF Core entities.
+
+**HasStandardAuditColumns**: If the view contains `Id`, `CreatedDate`, and `ModifiedDate` columns (case-insensitive), the entity inherits from `BaseEntity`; otherwise it is decorated with `[Keyless]`.
+
+### ForeignKeyDefinition
+
+Represents a foreign key constraint relationship.
+
+```csharp
+public class ForeignKeyDefinition
+{
+    public string Name { get; set; } = string.Empty;
+    public List<string> FromColumns { get; set; } = new();
+    public string ToSchema { get; set; } = string.Empty;
+    public string ToTable { get; set; } = string.Empty;
+    public List<string> ToColumns { get; set; } = new();
+    public bool OnDeleteCascade { get; set; }
+    public bool OnUpdateCascade { get; set; }
+    public ForeignKeyCardinality Cardinality { get; set; }
+}
+
+public enum ForeignKeyCardinality
+{
+    Unknown,
+    OneToMany,
+    OneToOne,
+    ManyToMany
+}
+```
+
+**Purpose**: Stores FK metadata parsed from DACPAC for inclusion in `TableDefinition.ForeignKeys`.
+
+**Note**: Foreign keys are parsed and stored in the model but navigation properties are not currently generated in entity classes. The FK data is available for future navigation property generation.
+
+### CheckConstraintDefinition
+
+Represents a check constraint on a table.
+
+```csharp
+public class CheckConstraintDefinition
+{
+    public string Name { get; set; } = string.Empty;
+    public string Expression { get; set; } = string.Empty;
+    public List<string> AffectedColumns { get; set; } = new();
+}
+```
+
+**Purpose**: Stores check constraint expressions for EF Core `HasCheckConstraint()` configuration.
+
+### UniqueConstraintDefinition
+
+Represents a unique constraint (distinct from unique indexes).
+
+```csharp
+public class UniqueConstraintDefinition
+{
+    public string Name { get; set; } = string.Empty;
+    public List<string> Columns { get; set; } = new();
+    public bool IsClustered { get; set; }
+}
+```
+
+**Purpose**: Stores unique constraint metadata for EF Core `HasAlternateKey()` configuration.
+
+### FunctionDefinition
+
+Represents a user-defined function discovered in the DACPAC.
+
+```csharp
+public class FunctionDefinition
+{
+    public string Server { get; set; } = string.Empty;
+    public string Database { get; set; } = string.Empty;
+    public string Schema { get; set; } = string.Empty;
+    public string FunctionName { get; set; } = string.Empty;
+    public FunctionType Type { get; set; }
+    public string ReturnType { get; set; } = string.Empty;
+    public List<FunctionParameter> Parameters { get; set; } = new();
+}
+
+public enum FunctionType { Scalar, TableValued, InlineTableValued }
+
+public class FunctionParameter
+{
+    public string Name { get; set; } = string.Empty;
+    public string SqlType { get; set; } = string.Empty;
+    public bool IsOutput { get; set; }
+}
+```
+
+**Purpose**: Represents scalar, table-valued, and inline-table-valued functions. Currently surfaced in the discovery report for reference.
+
+### ElementDiscoveryReport
+
+Reports database elements that are discovered but not directly generated as entities.
+
+```csharp
+public class ElementDiscoveryReport
+{
+    public string Server { get; set; } = string.Empty;
+    public string Database { get; set; } = string.Empty;
+    public List<ElementDetail> ExtendedProperties { get; set; } = new();
+    public List<ElementDetail> NonDefaultCollations { get; set; } = new();
+    public List<ElementDetail> Sequences { get; set; } = new();
+    public List<ElementDetail> SpatialColumns { get; set; } = new();
+    public List<ElementDetail> HierarchyIdColumns { get; set; } = new();
+    public List<ElementDetail> StoredProcedures { get; set; } = new();
+    public List<ElementDetail> Triggers { get; set; } = new();
+    public Dictionary<string, int> ElementTypeCounts { get; set; } = new();
+    public List<string> UnhandledElementTypes { get; set; } = new();
+}
+
+public class ElementDetail
+{
+    public string Name { get; set; } = string.Empty;
+    public string Location { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public string Details { get; set; } = string.Empty;
+}
+```
+
+**Purpose**: Generated per server/database combination and written as both JSON and HTML reports to `_output/DiscoveryReports/`.
 
 ## Services
 
@@ -775,11 +961,11 @@ modelBuilder.Entity<Core.Entities.Server.Database.ClassName>()
     .HasDefaultValueSql("0");
 ```
 
-**Purpose**: Output is written to `DbContext.onModelCreating` file for manual integration.
+**Purpose**: Written to `_output/Configuration/{Server}/{Database}/{Database}EntityConfiguration.cs` and called from `SQLDbContext.OnModelCreating`.
 
 ### FileWriterService
 
-**Responsibility**: Write generated entity classes to file system.
+**Responsibility**: Write generated entity classes, views, configuration files, and the DbContext file to the file system.
 
 **Key Methods**:
 
@@ -791,16 +977,33 @@ Writes a single entity class file.
 {outputDirectory}/{Server}/{Database}/{ClassName}.cs
 ```
 
-**Process**:
-1. Create server subdirectory if needed
-2. Create database subdirectory if needed
-3. Generate PascalCase filename
-4. Write file with UTF-8 encoding
-5. Log relative path
-
 **Example**:
 - Input: `ProductionServer`, `CustomerDB`, `user_accounts`
 - Output: `_output/ProductionServer/CustomerDB/UserAccounts.cs`
+
+#### `WriteViewFile(...)`
+Writes a view entity class file.
+
+**File Path Structure**:
+```
+{outputDirectory}/{Server}/{Database}/Views/{ViewClassName}.cs
+```
+
+#### `WriteConfigurationFile(...)`
+Writes a per-database EF Core configuration class.
+
+**File Path Structure**:
+```
+{outputDirectory}/Configuration/{Server}/{Database}/{Database}EntityConfiguration.cs
+```
+
+#### `WriteDbContextFile(string outputDirectory, string dbContextCode)`
+Writes the generated SQLDbContext class.
+
+**File Path**:
+```
+{outputDirectory}/SQLDbContext.cs
+```
 
 #### `EnsureOutputDirectoryExists(string outputDirectory)`
 Creates root output directory if missing.
@@ -809,6 +1012,75 @@ Creates root output directory if missing.
 Deletes all files in output directory if `force` is true.
 
 **Note**: Currently not used in main workflow (output directory is manually purged in Program.cs).
+
+### ReportWriterService
+
+**Responsibility**: Write element discovery reports in JSON and HTML formats.
+
+**Key Methods**:
+
+#### `WriteJsonReport(string outputDirectory, List<ElementDiscoveryReport> reports)`
+Writes one JSON file per server/database to `_output/DiscoveryReports/`.
+
+**File Path Structure**:
+```
+{outputDirectory}/DiscoveryReports/{Server}_{Database}_Discovery.json
+```
+
+#### `WriteHtmlReport(string outputDirectory, List<ElementDiscoveryReport> reports)`
+Writes one styled HTML file per server/database.
+
+**File Path Structure**:
+```
+{outputDirectory}/DiscoveryReports/{Server}_{Database}_Discovery.html
+```
+
+**HTML Features**:
+- Responsive grid summary cards
+- Tables for stored procedures, sequences, triggers, extended properties
+- Full element type count table
+- Inline CSS (single-file output)
+
+#### `WriteIndexHtml(string outputDirectory, List<ElementDiscoveryReport> reports)`
+Writes an index page linking all individual discovery reports.
+
+**File Path**:
+```
+{outputDirectory}/DiscoveryReports/index.html
+```
+
+### DbContextGenerator
+
+**Responsibility**: Generate the `SQLDbContext` class with `DbSet` properties for all entities and views, plus `OnModelCreating` calls to all configuration classes.
+
+**Key Method**:
+
+#### `GenerateSQLDbContext(List<TableDefinition> allTables, List<ViewDefinition> allViews, List<(string Server, string Database)> serverDatabasePairs)`
+
+**Generated File**: `_output/SQLDbContext.cs`
+
+**Generated Class Structure**:
+```csharp
+public partial class SQLDbContext(DbContextOptions<SQLDbContext> options) : BaseDbContext(options)
+{
+    // Table Entity DbSets grouped by server/database
+    public DbSet<Server1.Database1.Users> Server1Database1Users { get; set; }
+    ...
+
+    // View Entity DbSets grouped by server/database
+    public DbSet<Server1.Database1.VwActiveUsers> Server1Database1VwActiveUsers { get; set; }
+    ...
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+        Database1EntityConfiguration.Configure(modelBuilder);
+        ...
+    }
+}
+```
+
+**DbSet Naming**: PascalCase entity name. If the same entity name appears in multiple databases, the name is prefixed with `{Server}{Database}` to avoid conflicts.
 
 ## Utilities
 
@@ -939,7 +1211,7 @@ Ensures valid C# identifier.
 │    - Determine workspace root                                │
 │    - Set input/output directories                            │
 │    - Purge output directory                                  │
-│    - Initialize services                                     │
+│    - Initialize all services                                 │
 └──────────────────┬──────────────────────────────────────────┘
                    │
 ┌──────────────────▼──────────────────────────────────────────┐
@@ -957,33 +1229,59 @@ Ensures valid C# identifier.
 │    └──────┬──────────────────────────────────┘              │
 │           │                                                  │
 │    ┌──────▼──────────────────────────────────┐              │
-│    │ 3b. Extract model.xml from DACPAC      │              │
+│    │ 3b. Extract model.xml from DACPAC       │              │
 │    └──────┬──────────────────────────────────┘              │
 │           │                                                  │
 │    ┌──────▼──────────────────────────────────┐              │
-│    │ 3c. Group rows by Schema/Table         │              │
+│    │ 3c. Generate ElementDiscoveryReport     │              │
 │    └──────┬──────────────────────────────────┘              │
 │           │                                                  │
 │    ┌──────▼──────────────────────────────────┐              │
-│    │ 3d. For Each Table:                    │              │
-│    │     - Parse table from model.xml       │              │
-│    │     - Enrich with primary keys         │              │
-│    │     - Validate entity class            │              │
-│    │     - Generate C# code                 │              │
-│    │     - Write to file                    │              │
-│    │     - Collect TableDefinition          │              │
+│    │ 3d. Parse & generate all views          │              │
+│    │     - ParseViews() → ViewDefinition[]  │              │
+│    │     - GenerateViewClass() per view      │              │
+│    │     - WriteViewFile() per view          │              │
+│    └──────┬──────────────────────────────────┘              │
+│           │                                                  │
+│    ┌──────▼──────────────────────────────────┐              │
+│    │ 3e. Group Excel rows by Schema/Table    │              │
+│    └──────┬──────────────────────────────────┘              │
+│           │                                                  │
+│    ┌──────▼──────────────────────────────────┐              │
+│    │ 3f. For Each Table:                     │              │
+│    │     - ParseTable() from model.xml       │              │
+│    │     - EnrichTableWithPrimaryKeys()      │              │
+│    │     - ValidateEntityClass()             │              │
+│    │     - GenerateEntityClass()             │              │
+│    │     - WriteEntityFile()                 │              │
+│    │     - Collect TableDefinition           │              │
 │    └──────┬──────────────────────────────────┘              │
 └───────────┼──────────────────────────────────────────────────┘
             │
 ┌───────────▼──────────────────────────────────────────────────┐
-│ 4. Generate DbContext Configuration                           │
-│    - Generate OnModelCreating body                            │
-│    - Write to DbContext.onModelCreating                       │
+│ 4. Generate Per-Database Configuration Classes                │
+│    - GenerateEntityConfiguration() per server/database        │
+│    - Append GenerateViewConfiguration() for views             │
+│    - WriteConfigurationFile() per server/database             │
 └───────────┬──────────────────────────────────────────────────┘
             │
 ┌───────────▼──────────────────────────────────────────────────┐
-│ 5. Display Summary                                            │
+│ 5. Generate SQLDbContext                                      │
+│    - GenerateSQLDbContext() → all DbSets + OnModelCreating   │
+│    - WriteDbContextFile()                                     │
+└───────────┬──────────────────────────────────────────────────┘
+            │
+┌───────────▼──────────────────────────────────────────────────┐
+│ 6. Write Discovery Reports                                    │
+│    - WriteJsonReport() per server/database                    │
+│    - WriteHtmlReport() per server/database                    │
+│    - WriteIndexHtml()                                         │
+└───────────┬──────────────────────────────────────────────────┘
+            │
+┌───────────▼──────────────────────────────────────────────────┐
+│ 7. Display Summary                                            │
 │    - Entities generated                                       │
+│    - Views generated                                          │
 │    - Tables skipped                                           │
 │    - Errors encountered                                       │
 └───────────────────────────────────────────────────────────────┘
@@ -1004,12 +1302,12 @@ if (currentDir.Contains("bin"))
     workspaceRoot = Path.GetFullPath(Path.Combine(currentDir, "..", "..", "..", "..", ".."));
 }
 
-var projectDirectory = Path.Combine(workspaceRoot, "src\\DataLayer.DacpacEntityGenerator");
+var projectDirectory = Path.Combine(workspaceRoot, "src\\_DacpacEntityGenerator");
 var inputDirectory = Path.Combine(projectDirectory, "_input");
 var outputDirectory = Path.Combine(projectDirectory, "_output");
 ```
 
-**Note**: Current implementation has hardcoded path; assumes project is in `src\DataLayer.DacpacEntityGenerator\`.
+**Note**: Current implementation has hardcoded directory name `src\_DacpacEntityGenerator`; the actual project directory is `src/DacpacEntityGenerator`. This path works when the executable is launched from the workspace root.
 
 **Output Directory Purge**:
 - Deletes all files
@@ -1036,46 +1334,53 @@ Dictionary<Server, Dictionary<Database, List<ExcelRow>>>
 
 #### Step 3: Process Each Server/Database
 
-**For Each Server**:
-  **For Each Database**:
+**For Each Server → For Each Database**:
     1. Check DACPAC file exists
     2. Extract `model.xml`
-    3. Group rows by `Schema` + `Table`
-    4. **For Each Table**:
+    3. Generate `ElementDiscoveryReport` (stored procedures, sequences, triggers, etc.)
+    4. Parse and generate all **view entities** from model.xml
+    5. Group Excel rows by `Schema` + `Table`
+    6. **For Each Table**:
        - Get list of required columns from Excel
-       - Parse table definition from XML
-       - Auto-add primary key columns
+       - Parse table definition from XML (including FK/check/unique constraints)
+       - Auto-add primary key columns not in Excel
        - Validate table definition
        - Generate entity class code
        - Write to file system
-       - Add to collection for DbContext generation
+       - Add to collection for configuration/DbContext generation
 
 **Error Handling**:
 - Missing DACPAC: Log error, increment error count, skip database
 - Parse failure: Log error, increment skip count, continue to next table
 - Validation failure: Log error, increment skip and error counts, continue
 
-#### Step 4: Generate DbContext Configuration
+#### Step 4: Generate Per-Database Configuration Classes
+
+**Process** (per server/database combination):
+1. Call `GenerateEntityConfiguration()` for all tables
+2. Append `GenerateViewConfiguration()` output for any views
+3. Write complete `{Database}EntityConfiguration.cs` via `WriteConfigurationFile()`
+
+#### Step 5: Generate SQLDbContext
 
 **Process**:
-1. Collect all successfully generated `TableDefinition` objects
-2. Generate `OnModelCreating` configuration lines
-3. Write to `DbContext.onModelCreating` in output root
+1. Call `GenerateSQLDbContext()` with all tables, views, and server/database pairs
+2. Write `SQLDbContext.cs` via `WriteDbContextFile()`
 
-**Output Format**:
-```csharp
-modelBuilder.Entity<Core.Entities.Server1.Database1.Table1>();
-modelBuilder.Entity<Core.Entities.Server1.Database1.Table1>().HasIndex(e => e.Email).IsUnique().HasDatabaseName("IX_Table1_Email");
-modelBuilder.Entity<Core.Entities.Server1.Database1.Table2>().HasIndex(e => new { e.Key1, e.Key2 }).IsUnique().HasDatabaseName("IX_Table2_Key1_Key2");
-modelBuilder.Entity<Core.Entities.Server2.Database1.Table1>().Property(e => e.Amount).HasColumnType("decimal(18,2)");
-```
+#### Step 6: Write Discovery Reports
 
-#### Step 5: Display Summary
+**Process** (once, after all databases are processed):
+1. `WriteJsonReport()` → one `.json` per server/database in `DiscoveryReports/`
+2. `WriteHtmlReport()` → one `.html` per server/database in `DiscoveryReports/`
+3. `WriteIndexHtml()` → `DiscoveryReports/index.html`
+
+#### Step 7: Display Summary
 
 **Console Output**:
 ```
 === Generation Summary ===
 [SUCCESS] Entities generated: 42
+[SUCCESS] Views generated: 5
 [WARNING] Tables skipped: 3
 [ERROR] Errors encountered: 1
 
@@ -1151,13 +1456,14 @@ DataLayer.Core.Entities.{PascalCaseServer}.{PascalCaseDatabase}
 
 **Conditionally Applied**:
 - `[Table]`: Applied to class (always)
-- `[Required]`: Applied if `!IsNullable` OR is single primary key
+- `[Required]`: Applied if `!IsNullable` AND no default value AND not computed
 - `[MaxLength]`: Applied for string types with defined length
+- `[Timestamp]`: Applied for row version / concurrency token columns
+- `[DatabaseGenerated(DatabaseGeneratedOption.Computed)]`: Applied for computed columns
 
 **Not Applied**:
-- `[Key]`: Omitted in favor of `OnModelCreating` configuration
+- `[Key]`: Omitted in favor of EF Core configuration (`BaseEntity` provides the key)
 - `[StringLength]`: Using `[MaxLength]` instead
-- `[DatabaseGenerated]`: Could be added for identity columns (not currently implemented)
 
 ### Type Nullability Handling
 
@@ -1189,26 +1495,33 @@ public int? Age { get; set; }
 ### Input File Locations
 
 **Excel File**:
-- Path: `{workspace}/src/DataLayer.DacpacEntityGenerator/_input/*.xlsx`
+- Path: `{workspace}/src/DacpacEntityGenerator/_input/*.xlsx`
 - First `.xlsx` file found is used
 - Multiple files generate warning
 
 **DACPAC Files**:
-- Path: `{workspace}/src/DataLayer.DacpacEntityGenerator/_input/dacpacs/{Server}_{Database}.dacpac`
+- Path: `{workspace}/src/DacpacEntityGenerator/_input/dacpacs/{Server}_{Database}.dacpac`
 - Naming convention is strict
 - Missing files cause database to be skipped
 
 ### Output File Locations
 
 **Entity Classes**:
-- Path: `{workspace}/src/DataLayer.DacpacEntityGenerator/_output/{Server}/{Database}/{ClassName}.cs`
-- Directories created automatically
-- UTF-8 encoding used
+- Path: `_output/{Server}/{Database}/{ClassName}.cs`
 
-**DbContext Configuration**:
-- Path: `{workspace}/src/DataLayer.DacpacEntityGenerator/_output/DbContext.onModelCreating`
-- Plain text file (not `.cs`)
-- Requires manual integration
+**View Entity Classes**:
+- Path: `_output/{Server}/{Database}/Views/{ViewClassName}.cs`
+
+**EF Core Configuration Classes**:
+- Path: `_output/Configuration/{Server}/{Database}/{Database}EntityConfiguration.cs`
+
+**SQLDbContext**:
+- Path: `_output/SQLDbContext.cs`
+
+**Discovery Reports**:
+- Path: `_output/DiscoveryReports/{Server}_{Database}_Discovery.json`
+- Path: `_output/DiscoveryReports/{Server}_{Database}_Discovery.html`
+- Path: `_output/DiscoveryReports/index.html`
 
 ### File System Operations
 
@@ -1304,9 +1617,9 @@ catch (Exception ex)
 
 **Project Path**:
 ```csharp
-var projectDirectory = Path.Combine(workspaceRoot, "src\\DataLayer.DacpacEntityGenerator");
+var projectDirectory = Path.Combine(workspaceRoot, "src\\_DacpacEntityGenerator");
 ```
-**Issue**: Not flexible for different project structures.
+**Issue**: Hardcoded directory name does not match the actual project directory (`src/DacpacEntityGenerator`). Run the application from the workspace root for paths to resolve correctly.
 
 **Namespace Prefix**:
 ```csharp
@@ -1323,7 +1636,7 @@ public class {ClassName} : BaseEntity
 ```csharp
 [Table("{TableName}", Schema = "{Database}")]
 ```
-**Note**: Uses Database name as schema (unusual choice).
+**Note**: Uses Database name as schema (known limitation — uses Database instead of actual SQL schema `dbo`).
 
 ### Configurable Behavior
 
@@ -1415,16 +1728,14 @@ public interface INamingStrategy
 
 ## Known Limitations
 
-1. **Hardcoded Paths**: Project directory structure is assumed
-2. **Schema Attribute Bug**: Uses Database name instead of Schema name in `[Table]` attribute
-3. **Missing Property**: `AddedByAPI` referenced but not defined in `ExcelRow` model
-4. **No Relationship Generation**: Foreign keys not processed
-5. **No Navigation Properties**: Entity relationships not generated
-6. **Single Excel Support**: Only first Excel file is processed
-7. **Windows Path Separators**: Uses `\\` which may cause issues on Unix
-8. **No Rollback**: Partial failures leave partial output
-9. **No Incremental Generation**: Always regenerates all entities
-10. **BaseEntity Assumption**: Assumes `BaseEntity` class exists externally
+1. **Hardcoded Path**: Project directory name is hardcoded as `src\_DacpacEntityGenerator`; the project actually lives at `src/DacpacEntityGenerator`
+2. **Schema Attribute Bug**: `[Table]` attribute uses `Database` name as schema (`Schema = "{Database}"`), not the actual SQL schema (`dbo`, etc.)
+3. **No Navigation Properties**: Foreign keys are parsed and stored in the model but navigation properties are not generated in entity classes
+4. **Single Excel Support**: Only the first `.xlsx` file found in `_input/` is processed
+5. **No Rollback**: Partial failures leave partial output in `_output/`
+6. **No Incremental Generation**: Always regenerates all entities (full output purge on each run)
+7. **BaseEntity Assumption**: Assumes `BaseEntity` class exists in `DataLayer.Core.Entities` namespace in the consuming project
+8. **DbContext Base Assumption**: Assumes `BaseDbContext` exists in `DataLayer.Infrastructure.Persistence.Contexts.Base`
 
 ## Performance Characteristics
 

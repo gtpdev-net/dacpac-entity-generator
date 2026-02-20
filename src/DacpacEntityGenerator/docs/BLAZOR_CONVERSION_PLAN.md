@@ -1,5 +1,7 @@
 # DACPAC Entity Generator - Blazor Server Conversion Plan
 
+> **Implementation Status**: Not yet started (as of February 2026). This is a future roadmap document. The console application remains the only implementation. See [SPEC.md](SPEC.md) for the current technical reference.
+
 ## Table of Contents
 
 1. [Overview](#overview)
