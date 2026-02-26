@@ -17,7 +17,6 @@ public class GenerationOrchestrator
     private readonly PrimaryKeyEnricher     _pkEnricher;
     private readonly EntityClassGenerator   _entityGenerator;
     private readonly FileWriterService      _fileWriter;
-    private readonly ReportWriterService    _reportWriter;
     private readonly DbContextGenerator     _dbContextGenerator;
     private readonly IGenerationLogger      _logger;
 
@@ -28,7 +27,6 @@ public class GenerationOrchestrator
         PrimaryKeyEnricher     pkEnricher,
         EntityClassGenerator   entityGenerator,
         FileWriterService      fileWriter,
-        ReportWriterService    reportWriter,
         DbContextGenerator     dbContextGenerator,
         IGenerationLogger      logger)
     {
@@ -38,7 +36,6 @@ public class GenerationOrchestrator
         _pkEnricher          = pkEnricher;
         _entityGenerator     = entityGenerator;
         _fileWriter          = fileWriter;
-        _reportWriter        = reportWriter;
         _dbContextGenerator  = dbContextGenerator;
         _logger              = logger;
     }
@@ -263,22 +260,6 @@ public class GenerationOrchestrator
                 result.Errors.Add(errorMsg);
                 result.ErrorsEncountered++;
             }
-        }
-
-        // ── Step 7: Write discovery reports ──────────────────────────────────
-        if (allDiscoveryReports.Any())
-        {
-            _logger.LogInfo("");
-            _logger.LogInfo("Generating discovery reports...");
-
-            if (_reportWriter.WriteJsonReport(outputDirectory, allDiscoveryReports))
-                _logger.LogProgress($"Generated {allDiscoveryReports.Count} JSON discovery reports");
-
-            if (_reportWriter.WriteHtmlReport(outputDirectory, allDiscoveryReports))
-                _logger.LogProgress($"Generated {allDiscoveryReports.Count} HTML discovery reports");
-
-            if (_reportWriter.WriteIndexHtml(outputDirectory, allDiscoveryReports))
-                _logger.LogProgress("Generated discovery reports index page");
         }
 
         result.DiscoveryReports = allDiscoveryReports;

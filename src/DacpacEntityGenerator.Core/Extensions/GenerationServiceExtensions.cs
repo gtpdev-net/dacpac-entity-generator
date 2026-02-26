@@ -17,7 +17,6 @@ public static class GenerationServiceExtensions
         services.AddTransient<PrimaryKeyEnricher>();
         services.AddTransient<EntityClassGenerator>();
         services.AddTransient<FileWriterService>();
-        services.AddTransient<ReportWriterService>();
         services.AddTransient<DbContextGenerator>();
         services.AddTransient<GenerationOrchestrator>();
         services.AddTransient<SummaryDisplayService>();

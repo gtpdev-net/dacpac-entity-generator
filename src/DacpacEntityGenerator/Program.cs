@@ -31,7 +31,6 @@ class Program
                 new PrimaryKeyEnricher(logger),
                 new EntityClassGenerator(logger),
                 new FileWriterService(logger),
-                new ReportWriterService(logger),
                 new DbContextGenerator(),
                 logger);
 
