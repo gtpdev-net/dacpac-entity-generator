@@ -1,0 +1,386 @@
+@page "/generation/ef"
+@rendermode InteractiveServer
+@using DacpacEntityGenerator.Core.Models
+@using DacpacEntityGenerator.Core.Services
+@using DacpacEntityGenerator.Core.Abstractions
+@using Microsoft.JSInterop
+@inject BlazorGenerationLogger Logger
+@inject GenerationOrchestrator Orchestrator
+@inject IJSRuntime JS
+@inject IConfiguration Configuration
+@implements IAsyncDisposable
+
+<PageTitle>EF Generation &mdash; @Configuration["AppTitle"]</PageTitle>
+
+<h1>EF Entity Generation</h1>
+<p class="text-muted">
+    Upload your Excel mapping file and DACPAC files, choose output locations, then click Generate.
+    Output files are written directly to your local filesystem via the browser&rsquo;s File System Access API.
+</p>
+
+@if (!_fsApiSupported.HasValue)
+{
+    <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+}
+else if (_fsApiSupported == false)
+{
+    <div class="alert alert-danger">
+        <strong>Browser not supported.</strong>
+        The File System Access API is required for writing output files.
+        Please use Chrome, Edge, or another Chromium-based browser.
+    </div>
+}
+else
+{
+    @* ── Input Files ──────────────────────────────────────────────────────── *@
+    <div class="card mb-3">
+        <div class="card-header fw-semibold">Input Files</div>
+        <div class="card-body row g-3" style="max-width:800px">
+            <div class="col-12">
+                <label class="form-label">Excel Mapping File (.xlsx)</label>
+                <InputFile OnChange="OnExcelSelected" accept=".xlsx" class="form-control" />
+                @if (_excelFile is not null)
+                {
+                    <div class="form-text text-success">&#10003; @_excelFile.Name (@FormatBytes(_excelFile.Size))</div>
+                }
+            </div>
+            <div class="col-12">
+                <label class="form-label">DACPAC Files (.dacpac) — select one or more</label>
+                <InputFile OnChange="OnDacpacsSelected" accept=".dacpac" multiple class="form-control" />
+                @if (_dacpacFiles.Count > 0)
+                {
+                    <ul class="list-unstyled mt-1 mb-0 small text-success">
+                        @foreach (var f in _dacpacFiles)
+                        {
+                            <li>&#10003; @f.Name (@FormatBytes(f.Size))</li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* ── Output Locations ─────────────────────────────────────────────────── *@
+    <div class="card mb-3">
+        <div class="card-header fw-semibold">Output Locations</div>
+        <div class="card-body row g-3" style="max-width:800px">
+            <div class="col-12">
+                <label class="form-label">Entity Output Folder</label>
+                <div class="input-group">
+                    <input type="text" class="form-control font-monospace"
+                           value="@(_entityDirName ?? "(none selected)")"
+                           readonly />
+                    <button class="btn btn-outline-secondary" @onclick="SelectEntityDirectory"
+                            disabled="@_running">
+                        Browse&hellip;
+                    </button>
+                </div>
+                <div class="form-text">The folder where entity .cs files will be written.</div>
+            </div>
+            <div class="col-12">
+                <label class="form-label">DbContext File</label>
+                <div class="input-group">
+                    <input type="text" class="form-control font-monospace"
+                           value="@(_dbContextFileName ?? "(none selected)")"
+                           readonly />
+                    <button class="btn btn-outline-secondary" @onclick="SelectDbContextFile"
+                            disabled="@_running">
+                        Browse&hellip;
+                    </button>
+                </div>
+                <div class="form-text">The existing .cs file to save the DbContext to (will be overwritten).</div>
+            </div>
+        </div>
+    </div>
+
+    @* ── Generate ─────────────────────────────────────────────────────────── *@
+    <div class="mb-4">
+        <button class="btn btn-primary btn-lg"
+                @onclick="RunGeneration"
+                disabled="@(!CanGenerate)">
+            @if (_running)
+            {
+                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                <span>Generating&hellip;</span>
+            }
+            else
+            {
+                <span>&#9881; Generate</span>
+            }
+        </button>
+        @if (_running)
+        {
+            <button class="btn btn-outline-danger ms-2" @onclick="Cancel">Cancel</button>
+        }
+    </div>
+
+    @* ── Progress Log ─────────────────────────────────────────────────────── *@
+    @if (_logLines.Count > 0 || _running)
+    {
+        <div class="card mb-4">
+            <div class="card-header fw-semibold d-flex justify-content-between">
+                <span>Progress Log</span>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="ClearLog">Clear</button>
+            </div>
+            <div class="card-body p-0">
+                <div id="logContainer"
+                     style="font-family:monospace;font-size:.82rem;max-height:400px;overflow-y:auto;padding:.75rem;">
+                    @foreach (var (level, message) in _logLines)
+                    {
+                        <div class="@LogLineClass(level)">@message</div>
+                    }
+                    @if (_running)
+                    {
+                        <div class="text-muted fst-italic">Running&hellip;</div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ── Result ───────────────────────────────────────────────────────────── *@
+    @if (_result is not null)
+    {
+        <div class="alert @(_result.Success ? "alert-success" : "alert-danger") mb-4">
+            @if (_result.Success)
+            {
+                <strong>Generation complete!</strong>
+            }
+            else
+            {
+                <strong>Generation finished with errors.</strong>
+            }
+            <div class="row g-3 mt-1">
+                <div class="col-auto"><span class="badge bg-success fs-6">Entities: @_result.EntitiesGenerated</span></div>
+                <div class="col-auto"><span class="badge bg-info fs-6">Views: @_result.ViewsGenerated</span></div>
+                <div class="col-auto"><span class="badge bg-warning text-dark fs-6">Skipped: @_result.TablesSkipped</span></div>
+                <div class="col-auto"><span class="badge bg-danger fs-6">Errors: @_result.ErrorsEncountered</span></div>
+            </div>
+            @if (_result.Errors.Count > 0)
+            {
+                <ul class="mt-2 mb-0">
+                    @foreach (var e in _result.Errors)
+                    {
+                        <li>@e</li>
+                    }
+                </ul>
+            }
+        </div>
+
+        @* ── Discovery Reports ──────────────────────────────────────────── *@
+        @if (_result.DiscoveryReports.Count > 0)
+        {
+            <h4>Discovery Reports</h4>
+            <p class="text-muted small">
+                Elements discovered in the DACPAC(s) that may require manual migration consideration.
+            </p>
+            @foreach (var report in _result.DiscoveryReports)
+            {
+                <DiscoveryReportPanel Report="@report" />
+            }
+        }
+    }
+}
+
+@code {
+    // ── JS interop ────────────────────────────────────────────────────────────
+    private IJSObjectReference? _jsModule;
+
+    // ── File selection state ──────────────────────────────────────────────────
+    private IBrowserFile? _excelFile;
+    private readonly List<IBrowserFile> _dacpacFiles = new();
+    private string? _entityDirName;
+    private string? _dbContextFileName;
+    private bool? _fsApiSupported;
+
+    // ── Run state ─────────────────────────────────────────────────────────────
+    private bool _running;
+    private CancellationTokenSource? _cts;
+    private GenerationResult? _result;
+    private readonly List<LogEntry> _logLines = new();
+    private record LogEntry(string Level, string Message);
+
+    // ── Temp paths ────────────────────────────────────────────────────────────
+    private string? _tempDir;
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/fileSystemInterop.js");
+        _fsApiSupported = await _jsModule.InvokeAsync<bool>("isFileSystemAccessSupported");
+        Logger.OnLog += HandleLog;
+        StateHasChanged();
+    }
+
+    // ── File events ───────────────────────────────────────────────────────────
+    private void OnExcelSelected(InputFileChangeEventArgs e) => _excelFile = e.File;
+
+    private void OnDacpacsSelected(InputFileChangeEventArgs e)
+    {
+        _dacpacFiles.Clear();
+        _dacpacFiles.AddRange(e.GetMultipleFiles(100));
+    }
+
+    // ── Folder / file pickers ─────────────────────────────────────────────────
+    private async Task SelectEntityDirectory()
+    {
+        if (_jsModule is null) return;
+        _entityDirName = await _jsModule.InvokeAsync<string?>("selectEntityDirectory");
+        StateHasChanged();
+    }
+
+    private async Task SelectDbContextFile()
+    {
+        if (_jsModule is null) return;
+        _dbContextFileName = await _jsModule.InvokeAsync<string?>("selectDbContextFile");
+        StateHasChanged();
+    }
+
+    // ── CanGenerate ───────────────────────────────────────────────────────────
+    private bool CanGenerate =>
+        !_running
+        && _excelFile is not null
+        && _dacpacFiles.Count > 0
+        && _entityDirName is not null
+        && _dbContextFileName is not null;
+
+    // ── Main generation flow ──────────────────────────────────────────────────
+    private async Task RunGeneration()
+    {
+        if (!CanGenerate || _jsModule is null) return;
+
+        _result = null;
+        _logLines.Clear();
+        _running = true;
+        _cts = new CancellationTokenSource();
+        StateHasChanged();
+
+        try
+        {
+            // 1. Set up temp directories
+            _tempDir = Path.Combine(Path.GetTempPath(), "efgen_" + Guid.NewGuid().ToString("N"));
+            var tempInput  = Path.Combine(_tempDir, "_input");
+            var tempOutput = Path.Combine(_tempDir, "_output");
+            Directory.CreateDirectory(tempInput);
+            Directory.CreateDirectory(tempOutput);
+
+            // 2. Write uploaded files to temp input
+            await WriteExcelToTemp(tempInput);
+            await WriteDacpacsToTemp(tempInput);
+
+            // 3. Run orchestrator on background thread
+            GenerationResult result = await Task.Run(() => Orchestrator.Run(tempInput, tempOutput));
+            _result = result;
+
+            if (result.Success)
+            {
+                // 4. Collect generated output files
+                var entityFiles = new List<object>();
+                string? dbContextContent = null;
+
+                foreach (var filePath in Directory.EnumerateFiles(tempOutput, "*", SearchOption.AllDirectories))
+                {
+                    var fileName = Path.GetFileName(filePath);
+                    var content  = await File.ReadAllTextAsync(filePath);
+
+                    if (fileName.EndsWith("DbContext.cs", StringComparison.OrdinalIgnoreCase))
+                        dbContextContent = content;
+                    else
+                        entityFiles.Add(new { name = fileName, content });
+                }
+
+                // 5. Write entity files to selected folder
+                if (entityFiles.Count > 0)
+                    await _jsModule.InvokeVoidAsync("writeFilesToDirectory", entityFiles);
+
+                // 6. Write DbContext to selected file
+                if (dbContextContent is not null)
+                    await _jsModule.InvokeVoidAsync("writeDbContextFile", dbContextContent);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            _logLines.Add(new LogEntry("warning", "Generation cancelled."));
+        }
+        catch (Exception ex)
+        {
+            _logLines.Add(new LogEntry("error", $"Unexpected error: {ex.Message}"));
+        }
+        finally
+        {
+            _running = false;
+            CleanupTemp();
+            StateHasChanged();
+            if (_jsModule is not null)
+                await _jsModule.InvokeVoidAsync("scrollToBottom", "logContainer");
+        }
+    }
+
+    private void Cancel() => _cts?.Cancel();
+
+    // ── File helpers ──────────────────────────────────────────────────────────
+    private async Task WriteExcelToTemp(string tempInput)
+    {
+        if (_excelFile is null) return;
+        var dest = Path.Combine(tempInput, _excelFile.Name);
+        await using var fs = File.Create(dest);
+        await using var src = _excelFile.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
+        await src.CopyToAsync(fs);
+    }
+
+    private async Task WriteDacpacsToTemp(string tempInput)
+    {
+        foreach (var file in _dacpacFiles)
+        {
+            var dest = Path.Combine(tempInput, file.Name);
+            await using var fs  = File.Create(dest);
+            await using var src = file.OpenReadStream(maxAllowedSize: 200 * 1024 * 1024);
+            await src.CopyToAsync(fs);
+        }
+    }
+
+    private void CleanupTemp()
+    {
+        if (_tempDir is not null && Directory.Exists(_tempDir))
+        {
+            try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
+            _tempDir = null;
+        }
+    }
+
+    // ── Logger callback ───────────────────────────────────────────────────────
+    private void HandleLog(string level, string message)
+    {
+        _logLines.Add(new LogEntry(level, message));
+        InvokeAsync(StateHasChanged);
+    }
+
+    // ── UI helpers ────────────────────────────────────────────────────────────
+    private static string LogLineClass(string level) => level switch
+    {
+        "error"    => "text-danger",
+        "warning"  => "text-warning",
+        "progress" => "text-info",
+        _          => "text-light",
+    };
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes < 1024)           return $"{bytes} B";
+        if (bytes < 1024 * 1024)    return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024):F1} MB";
+    }
+
+    private void ClearLog() => _logLines.Clear();
+
+    // ── Cleanup ───────────────────────────────────────────────────────────────
+    public async ValueTask DisposeAsync()
+    {
+        Logger.OnLog -= HandleLog;
+        _cts?.Cancel();
+        CleanupTemp();
+        if (_jsModule is not null)
+            await _jsModule.DisposeAsync();
+    }
+}

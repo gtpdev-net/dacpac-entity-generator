@@ -1,11 +1,19 @@
 using System.Text;
-using DacpacEntityGenerator.Models;
-using DacpacEntityGenerator.Utilities;
+using DacpacEntityGenerator.Core.Abstractions;
+using DacpacEntityGenerator.Core.Models;
+using DacpacEntityGenerator.Core.Utilities;
 
-namespace DacpacEntityGenerator.Services;
+namespace DacpacEntityGenerator.Core.Services;
 
 public class EntityClassGenerator
 {
+    private readonly IGenerationLogger _logger;
+
+    public EntityClassGenerator(IGenerationLogger logger)
+    {
+        _logger = logger;
+    }
+
     public string GenerateEntityClass(TableDefinition table)
     {
         var sb = new StringBuilder();
@@ -74,7 +82,7 @@ public class EntityClassGenerator
     private void GenerateProperty(StringBuilder sb, ColumnDefinition column, bool forceRequired = false)
     {
         var propertyName = NameConverter.ToPascalCase(column.Name);
-        var csharpType = SqlTypeMapper.MapToCSharpType(column.SqlType, column.IsNullable, out bool needsMaxLength);
+        var csharpType = SqlTypeMapper.MapToCSharpType(column.SqlType, column.IsNullable, out bool needsMaxLength, _logger);
 
         // Check if this is a bool property with a default value (requires special handling)
         // Only use backing field pattern for non-nullable columns with defaults
@@ -303,7 +311,7 @@ public class EntityClassGenerator
         var className = NameConverter.ToPascalCase(table.TableName);
         if (string.IsNullOrWhiteSpace(className) || className == "_")
         {
-            ConsoleLogger.LogError($"[{table.Server}].[{table.Database}].[{table.Schema}].[{table.TableName}] - Invalid class name generated for table");
+            _logger.LogError($"[{table.Server}].[{table.Database}].[{table.Schema}].[{table.TableName}] - Invalid class name generated for table");
             return false;
         }
 
@@ -313,7 +321,7 @@ public class EntityClassGenerator
             var propertyName = NameConverter.ToPascalCase(column.Name);
             if (string.IsNullOrWhiteSpace(propertyName) || propertyName == "_")
             {
-                ConsoleLogger.LogError($"[{table.Server}].[{table.Database}].[{table.Schema}].[{table.TableName}] - Invalid property name generated for column: {column.Name}");
+                _logger.LogError($"[{table.Server}].[{table.Database}].[{table.Schema}].[{table.TableName}] - Invalid property name generated for column: {column.Name}");
                 return false;
             }
         }
@@ -322,7 +330,7 @@ public class EntityClassGenerator
         var namespaceValue = $"{NameConverter.ToPascalCase(table.Server)}.{NameConverter.ToPascalCase(table.Database)}.Entities";
         if (string.IsNullOrWhiteSpace(namespaceValue))
         {
-            ConsoleLogger.LogError($"[{table.Server}].[{table.Database}].[{table.Schema}].[{table.TableName}] - Invalid namespace generated for table");
+            _logger.LogError($"[{table.Server}].[{table.Database}].[{table.Schema}].[{table.TableName}] - Invalid namespace generated for table");
             return false;
         }
 
@@ -436,7 +444,7 @@ public class EntityClassGenerator
             foreach (var column in table.Columns)
             {
                 var propertyName = NameConverter.ToPascalCase(column.Name);
-                var csharpType = SqlTypeMapper.MapToCSharpType(column.SqlType, column.IsNullable, out _);
+                var csharpType = SqlTypeMapper.MapToCSharpType(column.SqlType, column.IsNullable, out _, _logger);
 
                 var configurations = new List<string>();
 
@@ -617,7 +625,7 @@ public class EntityClassGenerator
     private void GenerateViewProperty(StringBuilder sb, ColumnDefinition column)
     {
         var propertyName = NameConverter.ToPascalCase(column.Name);
-        var csharpType = SqlTypeMapper.MapToCSharpType(column.SqlType, column.IsNullable, out bool needsMaxLength);
+        var csharpType = SqlTypeMapper.MapToCSharpType(column.SqlType, column.IsNullable, out bool needsMaxLength, _logger);
 
         // Add [Column] attribute
         sb.AppendLine($"        [Column(\"{column.Name}\")]");
@@ -775,7 +783,7 @@ public class EntityClassGenerator
                 foreach (var column in table.Columns)
                 {
                     var propertyName = NameConverter.ToPascalCase(column.Name);
-                    var csharpType = SqlTypeMapper.MapToCSharpType(column.SqlType, column.IsNullable, out _);
+                    var csharpType = SqlTypeMapper.MapToCSharpType(column.SqlType, column.IsNullable, out _, _logger);
                     var configurations = new List<string>();
 
                     var sqlBaseType = column.SqlType.Split('(')[0].Trim().ToLower();

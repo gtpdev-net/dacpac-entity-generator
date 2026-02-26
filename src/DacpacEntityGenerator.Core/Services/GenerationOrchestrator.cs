@@ -1,7 +1,8 @@
-using DacpacEntityGenerator.Models;
-using DacpacEntityGenerator.Utilities;
+using DacpacEntityGenerator.Core.Abstractions;
+using DacpacEntityGenerator.Core.Models;
+using DacpacEntityGenerator.Core.Utilities;
 
-namespace DacpacEntityGenerator.Services;
+namespace DacpacEntityGenerator.Core.Services;
 
 /// <summary>
 /// Orchestrates the end-to-end entity generation pipeline:
@@ -17,6 +18,7 @@ public class GenerationOrchestrator
     private readonly FileWriterService      _fileWriter;
     private readonly ReportWriterService    _reportWriter;
     private readonly DbContextGenerator     _dbContextGenerator;
+    private readonly IGenerationLogger      _logger;
 
     public GenerationOrchestrator(
         ExcelReaderService     excelReader,
@@ -26,7 +28,8 @@ public class GenerationOrchestrator
         EntityClassGenerator   entityGenerator,
         FileWriterService      fileWriter,
         ReportWriterService    reportWriter,
-        DbContextGenerator     dbContextGenerator)
+        DbContextGenerator     dbContextGenerator,
+        IGenerationLogger      logger)
     {
         _excelReader         = excelReader;
         _dacpacExtractor     = dacpacExtractor;
@@ -36,6 +39,7 @@ public class GenerationOrchestrator
         _fileWriter          = fileWriter;
         _reportWriter        = reportWriter;
         _dbContextGenerator  = dbContextGenerator;
+        _logger              = logger;
     }
 
     /// <summary>
@@ -54,7 +58,7 @@ public class GenerationOrchestrator
         var excelFilePath = _excelReader.FindExcelFile(inputDirectory);
         if (excelFilePath == null)
         {
-            ConsoleLogger.LogError("No Excel file found. Please place an .xlsx file in the _input/ folder.");
+            _logger.LogError("No Excel file found. Please place an .xlsx file in the _input/ folder.");
             result.Success = false;
             return result;
         }
@@ -63,11 +67,11 @@ public class GenerationOrchestrator
         var filteredRows = _excelReader.ReadAndFilterExcel(excelFilePath);
         if (filteredRows.Count == 0)
         {
-            ConsoleLogger.LogWarning("No rows matched the filter criteria.");
+            _logger.LogWarning("No rows matched the filter criteria.");
             return result;
         }
 
-        ConsoleLogger.LogInfo("");
+        _logger.LogInfo("");
 
         // ── Step 3: Group by Server / Database ────────────────────────────────
         var groupedData = _excelReader.GroupByServerAndDatabase(filteredRows);
@@ -86,13 +90,13 @@ public class GenerationOrchestrator
                 var database = databaseGroup.Key;
                 var rows     = databaseGroup.Value;
 
-                ConsoleLogger.LogInfo($"Processing Server: {server}, Database: {database}");
+                _logger.LogInfo($"Processing Server: {server}, Database: {database}");
 
                 // Check DACPAC exists
                 if (!_dacpacExtractor.DacpacExists(inputDirectory, server, database))
                 {
                     var errorMsg = $"DACPAC file not found: {server}_{database}.dacpac";
-                    ConsoleLogger.LogError(errorMsg);
+                    _logger.LogError(errorMsg);
                     result.Errors.Add(errorMsg);
                     result.ErrorsEncountered++;
                     continue;
@@ -111,14 +115,14 @@ public class GenerationOrchestrator
                 // Discovery report
                 var discoveryReport = _modelXmlParser.GenerateDiscoveryReport(modelXml, server, database);
                 allDiscoveryReports.Add(discoveryReport);
-                ConsoleLogger.LogInfo(
+                _logger.LogInfo(
                     $"[{server}].[{database}] - Discovery: " +
                     $"{discoveryReport.StoredProcedures.Count} stored procedures, " +
                     $"{discoveryReport.Sequences.Count} sequences, " +
                     $"{discoveryReport.Triggers.Count} triggers");
 
                 // Parse and write view entities
-                ConsoleLogger.LogInfo($"[{server}].[{database}] - Parsing views from DACPAC");
+                _logger.LogInfo($"[{server}].[{database}] - Parsing views from DACPAC");
                 var views = _modelXmlParser.ParseViews(modelXml, server, database);
 
                 foreach (var view in views)
@@ -138,7 +142,7 @@ public class GenerationOrchestrator
                 }
 
                 if (views.Count > 0)
-                    ConsoleLogger.LogProgress($"[{server}].[{database}] - Generated {views.Count} view entities");
+                    _logger.LogProgress($"[{server}].[{database}] - Generated {views.Count} view entities");
 
                 // Process tables
                 var tableGroups = rows
@@ -146,8 +150,8 @@ public class GenerationOrchestrator
                     .Where(g => g.Any(r => r.Generate))
                     .ToList();
 
-                ConsoleLogger.LogInfo($"Found {tableGroups.Count} tables to process");
-                ConsoleLogger.LogInfo("");
+                _logger.LogInfo($"Found {tableGroups.Count} tables to process");
+                _logger.LogInfo("");
 
                 foreach (var tableGroup in tableGroups)
                 {
@@ -192,14 +196,14 @@ public class GenerationOrchestrator
                     allTableDefinitions.Add(tableDefinition);
                 }
 
-                ConsoleLogger.LogInfo("");
+                _logger.LogInfo("");
             }
         }
 
         // ── Step 5: Generate configuration classes ────────────────────────────
         if (allTableDefinitions.Count > 0 || allViews.Count > 0)
         {
-            ConsoleLogger.LogInfo("Generating entity configurations...");
+            _logger.LogInfo("Generating entity configurations...");
 
             var tablesByDb = allTableDefinitions
                 .GroupBy(t => new { t.Server, t.Database })
@@ -239,8 +243,8 @@ public class GenerationOrchestrator
             }
 
             // ── Step 6: Generate SQLDbContext ─────────────────────────────────
-            ConsoleLogger.LogInfo("");
-            ConsoleLogger.LogInfo("Generating SQLDbContext...");
+            _logger.LogInfo("");
+            _logger.LogInfo("Generating SQLDbContext...");
             var dbContextCode = _dbContextGenerator.GenerateSQLDbContext(allTableDefinitions, allViews, serverDatabasePairs);
             if (!_fileWriter.WriteDbContextFile(outputDirectory, dbContextCode))
             {
@@ -253,19 +257,20 @@ public class GenerationOrchestrator
         // ── Step 7: Write discovery reports ──────────────────────────────────
         if (allDiscoveryReports.Any())
         {
-            ConsoleLogger.LogInfo("");
-            ConsoleLogger.LogInfo("Generating discovery reports...");
+            _logger.LogInfo("");
+            _logger.LogInfo("Generating discovery reports...");
 
             if (_reportWriter.WriteJsonReport(outputDirectory, allDiscoveryReports))
-                ConsoleLogger.LogProgress($"Generated {allDiscoveryReports.Count} JSON discovery reports");
+                _logger.LogProgress($"Generated {allDiscoveryReports.Count} JSON discovery reports");
 
             if (_reportWriter.WriteHtmlReport(outputDirectory, allDiscoveryReports))
-                ConsoleLogger.LogProgress($"Generated {allDiscoveryReports.Count} HTML discovery reports");
+                _logger.LogProgress($"Generated {allDiscoveryReports.Count} HTML discovery reports");
 
             if (_reportWriter.WriteIndexHtml(outputDirectory, allDiscoveryReports))
-                ConsoleLogger.LogProgress("Generated discovery reports index page");
+                _logger.LogProgress("Generated discovery reports index page");
         }
 
+        result.DiscoveryReports = allDiscoveryReports;
         return result;
     }
 }

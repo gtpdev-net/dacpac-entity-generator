@@ -1,16 +1,24 @@
-using DacpacEntityGenerator.Models;
-using DacpacEntityGenerator.Utilities;
+using DacpacEntityGenerator.Core.Abstractions;
+using DacpacEntityGenerator.Core.Models;
+using DacpacEntityGenerator.Core.Utilities;
 
-namespace DacpacEntityGenerator.Services;
+namespace DacpacEntityGenerator.Core.Services;
 
 public class PrimaryKeyEnricher
 {
+    private readonly IGenerationLogger _logger;
+
+    public PrimaryKeyEnricher(IGenerationLogger logger)
+    {
+        _logger = logger;
+    }
+
     public bool EnrichTableWithPrimaryKeys(TableDefinition table)
     {
         // Validate that table has at least one column
         if (table.Columns.Count == 0)
         {
-            ConsoleLogger.LogWarning($"[{table.Server}].[{table.Database}].[{table.Schema}].[{table.TableName}] - Table has no columns after filtering - skipping");
+            _logger.LogWarning($"[{table.Server}].[{table.Database}].[{table.Schema}].[{table.TableName}] - Table has no columns after filtering - skipping");
             return false;
         }
 
@@ -25,7 +33,7 @@ public class PrimaryKeyEnricher
             if (autoAddedPkColumns.Any())
             {
                 var columnNames = string.Join(", ", autoAddedPkColumns.Select(c => c.Name));
-                ConsoleLogger.LogInfo($"[{table.Server}].[{table.Database}].[{table.Schema}].[{table.TableName}] - Auto-added primary key columns: {columnNames}");
+                _logger.LogInfo($"[{table.Server}].[{table.Database}].[{table.Schema}].[{table.TableName}] - Auto-added primary key columns: {columnNames}");
             }
         }
 

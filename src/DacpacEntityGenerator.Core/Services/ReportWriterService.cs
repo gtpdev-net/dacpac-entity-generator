@@ -1,12 +1,20 @@
 using System.Text;
 using System.Text.Json;
-using DacpacEntityGenerator.Models;
-using DacpacEntityGenerator.Utilities;
+using DacpacEntityGenerator.Core.Abstractions;
+using DacpacEntityGenerator.Core.Models;
+using DacpacEntityGenerator.Core.Utilities;
 
-namespace DacpacEntityGenerator.Services;
+namespace DacpacEntityGenerator.Core.Services;
 
 public class ReportWriterService
 {
+    private readonly IGenerationLogger _logger;
+
+    public ReportWriterService(IGenerationLogger logger)
+    {
+        _logger = logger;
+    }
+
     public bool WriteJsonReport(string outputDirectory, List<ElementDiscoveryReport> reports)
     {
         try
@@ -28,14 +36,14 @@ public class ReportWriterService
                 var json = JsonSerializer.Serialize(report, options);
                 File.WriteAllText(filePath, json);
 
-                ConsoleLogger.LogInfo($"[{report.Server}].[{report.Database}] - Wrote discovery report: {fileName}");
+                _logger.LogInfo($"[{report.Server}].[{report.Database}] - Wrote discovery report: {fileName}");
             }
 
             return true;
         }
         catch (Exception ex)
         {
-            ConsoleLogger.LogError($"Failed to write JSON discovery reports: {ex.Message}");
+            _logger.LogError($"Failed to write JSON discovery reports: {ex.Message}");
             return false;
         }
     }
@@ -55,14 +63,14 @@ public class ReportWriterService
                 var html = GenerateHtmlReport(report);
                 File.WriteAllText(filePath, html);
 
-                ConsoleLogger.LogInfo($"[{report.Server}].[{report.Database}] - Wrote HTML discovery report: {fileName}");
+                _logger.LogInfo($"[{report.Server}].[{report.Database}] - Wrote HTML discovery report: {fileName}");
             }
 
             return true;
         }
         catch (Exception ex)
         {
-            ConsoleLogger.LogError($"Failed to write HTML discovery reports: {ex.Message}");
+            _logger.LogError($"Failed to write HTML discovery reports: {ex.Message}");
             return false;
         }
     }
@@ -249,12 +257,12 @@ public class ReportWriterService
             var html = GenerateIndexHtml(reports);
             File.WriteAllText(indexPath, html);
 
-            ConsoleLogger.LogInfo("Generated discovery reports index: ./output/DiscoveryReports/index.html");
+            _logger.LogInfo("Generated discovery reports index: ./output/DiscoveryReports/index.html");
             return true;
         }
         catch (Exception ex)
         {
-            ConsoleLogger.LogError($"Failed to write discovery reports index: {ex.Message}");
+            _logger.LogError($"Failed to write discovery reports index: {ex.Message}");
             return false;
         }
     }

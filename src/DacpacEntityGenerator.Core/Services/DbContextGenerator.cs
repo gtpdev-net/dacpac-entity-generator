@@ -1,8 +1,8 @@
 using System.Text;
-using DacpacEntityGenerator.Models;
-using DacpacEntityGenerator.Utilities;
+using DacpacEntityGenerator.Core.Models;
+using DacpacEntityGenerator.Core.Utilities;
 
-namespace DacpacEntityGenerator.Services;
+namespace DacpacEntityGenerator.Core.Services;
 
 public class DbContextGenerator
 {

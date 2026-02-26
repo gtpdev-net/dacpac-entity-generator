@@ -1,11 +1,19 @@
 using System.Xml.Linq;
-using DacpacEntityGenerator.Models;
-using DacpacEntityGenerator.Utilities;
+using DacpacEntityGenerator.Core.Abstractions;
+using DacpacEntityGenerator.Core.Models;
+using DacpacEntityGenerator.Core.Utilities;
 
-namespace DacpacEntityGenerator.Services;
+namespace DacpacEntityGenerator.Core.Services;
 
 public class ModelXmlParserService
 {
+    private readonly IGenerationLogger _logger;
+
+    public ModelXmlParserService(IGenerationLogger logger)
+    {
+        _logger = logger;
+    }
+
     private XNamespace _dacNamespace = "http://schemas.microsoft.com/sqlserver/dac/Serialization/2012/02";
 
     public TableDefinition? ParseTable(
@@ -30,11 +38,11 @@ public class ModelXmlParserService
             var tableElement = FindTableElement(doc, schema, tableName);
             if (tableElement == null)
             {
-                ConsoleLogger.LogWarning($"[{server}].[{database}].[{schema}].[{tableName}] - Table not found in DACPAC");
+                _logger.LogWarning($"[{server}].[{database}].[{schema}].[{tableName}] - Table not found in DACPAC");
                 return null;
             }
 
-            ConsoleLogger.LogInfo($"[{server}].[{database}].[{schema}].[{tableName}] - Parsing table");
+            _logger.LogInfo($"[{server}].[{database}].[{schema}].[{tableName}] - Parsing table");
 
             var tableDefinition = new TableDefinition
             {
@@ -83,38 +91,38 @@ public class ModelXmlParserService
             {
                 if (!allColumns.Any(c => c.Name.Equals(requiredCol, StringComparison.OrdinalIgnoreCase)))
                 {
-                    ConsoleLogger.LogWarning($"[{server}].[{database}].[{schema}].[{tableName}] - Column from Excel not found in table: {requiredCol}");
+                    _logger.LogWarning($"[{server}].[{database}].[{schema}].[{tableName}] - Column from Excel not found in table: {requiredCol}");
                 }
             }
 
             if (tableDefinition.Columns.Count == 0)
             {
-                ConsoleLogger.LogWarning($"[{server}].[{database}].[{schema}].[{tableName}] - Table has no columns after filtering - skipping");
+                _logger.LogWarning($"[{server}].[{database}].[{schema}].[{tableName}] - Table has no columns after filtering - skipping");
                 return null;
             }
 
             if (!primaryKeyColumns.Any())
             {
-                ConsoleLogger.LogWarning($"[{server}].[{database}].[{schema}].[{tableName}] - Table has no primary key");
+                _logger.LogWarning($"[{server}].[{database}].[{schema}].[{tableName}] - Table has no primary key");
             }
 
-            ConsoleLogger.LogInfo($"[{server}].[{database}].[{schema}].[{tableName}] - Table has {tableDefinition.Columns.Count} columns ({tableDefinition.Columns.Count(c => c.IsPrimaryKey)} PK, {tableDefinition.Columns.Count(c => c.IsFromExcel)} from Excel)");
+            _logger.LogInfo($"[{server}].[{database}].[{schema}].[{tableName}] - Table has {tableDefinition.Columns.Count} columns ({tableDefinition.Columns.Count(c => c.IsPrimaryKey)} PK, {tableDefinition.Columns.Count(c => c.IsFromExcel)} from Excel)");
 
             // Parse existing indexes
             tableDefinition.Indexes = ParseIndexes(doc, schema, tableName);
-            ConsoleLogger.LogInfo($"[{server}].[{database}].[{schema}].[{tableName}] - Found {tableDefinition.Indexes.Count} existing indexes");
+            _logger.LogInfo($"[{server}].[{database}].[{schema}].[{tableName}] - Found {tableDefinition.Indexes.Count} existing indexes");
 
             // Parse foreign keys
             tableDefinition.ForeignKeys = ParseForeignKeys(doc, schema, tableName);
-            ConsoleLogger.LogInfo($"[{server}].[{database}].[{schema}].[{tableName}] - Found {tableDefinition.ForeignKeys.Count} foreign keys");
+            _logger.LogInfo($"[{server}].[{database}].[{schema}].[{tableName}] - Found {tableDefinition.ForeignKeys.Count} foreign keys");
 
             // Parse check constraints
             tableDefinition.CheckConstraints = ParseCheckConstraints(doc, schema, tableName);
-            ConsoleLogger.LogInfo($"[{server}].[{database}].[{schema}].[{tableName}] - Found {tableDefinition.CheckConstraints.Count} check constraints");
+            _logger.LogInfo($"[{server}].[{database}].[{schema}].[{tableName}] - Found {tableDefinition.CheckConstraints.Count} check constraints");
 
             // Parse unique constraints
             tableDefinition.UniqueConstraints = ParseUniqueConstraints(doc, schema, tableName);
-            ConsoleLogger.LogInfo($"[{server}].[{database}].[{schema}].[{tableName}] - Found {tableDefinition.UniqueConstraints.Count} unique constraints");
+            _logger.LogInfo($"[{server}].[{database}].[{schema}].[{tableName}] - Found {tableDefinition.UniqueConstraints.Count} unique constraints");
 
             // Ensure primary key columns have an index
             if (primaryKeyColumns.Any())
@@ -143,11 +151,11 @@ public class ModelXmlParserService
                     };
 
                     tableDefinition.Indexes.Add(pkIndex);
-                    ConsoleLogger.LogInfo($"[{server}].[{database}].[{schema}].[{tableName}] - Added index for PK columns: {string.Join(", ", pkColumnsList)}");
+                    _logger.LogInfo($"[{server}].[{database}].[{schema}].[{tableName}] - Added index for PK columns: {string.Join(", ", pkColumnsList)}");
                 }
                 else
                 {
-                    ConsoleLogger.LogInfo($"[{server}].[{database}].[{schema}].[{tableName}] - Existing index '{existingPkIndex.Name}' covers PK columns");
+                    _logger.LogInfo($"[{server}].[{database}].[{schema}].[{tableName}] - Existing index '{existingPkIndex.Name}' covers PK columns");
                 }
             }
 
@@ -155,7 +163,7 @@ public class ModelXmlParserService
         }
         catch (Exception ex)
         {
-            ConsoleLogger.LogError($"[{server}].[{database}].[{schema}].[{tableName}] - Failed to parse table: {ex.Message}");
+            _logger.LogError($"[{server}].[{database}].[{schema}].[{tableName}] - Failed to parse table: {ex.Message}");
             return null;
         }
     }
@@ -172,7 +180,7 @@ public class ModelXmlParserService
 
         if (!tables.Any())
         {
-            ConsoleLogger.LogWarning($"No SqlTable elements found in DACPAC - the file may be using a different format");
+            _logger.LogWarning($"No SqlTable elements found in DACPAC - the file may be using a different format");
             return null;
         }
 
@@ -198,7 +206,7 @@ public class ModelXmlParserService
 
         if (!relationshipElements.Any())
         {
-            ConsoleLogger.LogWarning($"No 'Columns' relationship found for table - table may have no columns defined");
+            _logger.LogWarning($"No 'Columns' relationship found for table - table may have no columns defined");
             return columns;
         }
 
@@ -600,21 +608,21 @@ public class ModelXmlParserService
 
         if (root == null)
         {
-            ConsoleLogger.LogError($"[{server}].[{database}] - Invalid DACPAC: No root element found");
+            _logger.LogError($"[{server}].[{database}] - Invalid DACPAC: No root element found");
             return false;
         }
 
         // Validate root element is DataSchemaModel
         if (root.Name.LocalName != "DataSchemaModel")
         {
-            ConsoleLogger.LogError($"[{server}].[{database}] - Invalid DACPAC: Expected root element 'DataSchemaModel', found '{root.Name.LocalName}'");
+            _logger.LogError($"[{server}].[{database}] - Invalid DACPAC: Expected root element 'DataSchemaModel', found '{root.Name.LocalName}'");
             return false;
         }
 
         // Validate namespace
         if (root.Name.Namespace != _dacNamespace)
         {
-            ConsoleLogger.LogWarning($"[{server}].[{database}] - DACPAC namespace mismatch: Expected '{_dacNamespace}', found '{root.Name.Namespace}'");
+            _logger.LogWarning($"[{server}].[{database}] - DACPAC namespace mismatch: Expected '{_dacNamespace}', found '{root.Name.Namespace}'");
         }
 
         // Log DACPAC format information
@@ -622,7 +630,7 @@ public class ModelXmlParserService
         var schemaVersion = root.Attribute("SchemaVersion")?.Value ?? "unknown";
         var dspName = root.Attribute("DspName")?.Value ?? "unknown";
 
-        ConsoleLogger.LogInfo($"[{server}].[{database}] - DACPAC Format: FileFormatVersion={fileFormatVersion}, SchemaVersion={schemaVersion}");
+        _logger.LogInfo($"[{server}].[{database}] - DACPAC Format: FileFormatVersion={fileFormatVersion}, SchemaVersion={schemaVersion}");
 
         // Extract SQL Server version from DspName (e.g., Sql140 = SQL Server 2017)
         if (dspName.Contains("Sql"))
@@ -643,7 +651,7 @@ public class ModelXmlParserService
                     "160" => "SQL Server 2022",
                     _ => $"SQL Server (version code {versionCode})"
                 };
-                ConsoleLogger.LogInfo($"[{server}].[{database}] - Target SQL Server Version: {sqlServerVersion}");
+                _logger.LogInfo($"[{server}].[{database}] - Target SQL Server Version: {sqlServerVersion}");
             }
         }
 
@@ -651,7 +659,7 @@ public class ModelXmlParserService
         var modelElement = root.Element(_dacNamespace + "Model");
         if (modelElement == null)
         {
-            ConsoleLogger.LogError($"[{server}].[{database}] - Invalid DACPAC: No 'Model' element found");
+            _logger.LogError($"[{server}].[{database}] - Invalid DACPAC: No 'Model' element found");
             return false;
         }
 
@@ -982,7 +990,7 @@ public class ModelXmlParserService
         }
         catch (Exception ex)
         {
-            ConsoleLogger.LogError($"[{server}].[{database}] - Failed to parse views: {ex.Message}");
+            _logger.LogError($"[{server}].[{database}] - Failed to parse views: {ex.Message}");
             return new List<ViewDefinition>();
         }
     }
@@ -1220,7 +1228,7 @@ public class ModelXmlParserService
         }
         catch (Exception ex)
         {
-            ConsoleLogger.LogError($"[{server}].[{database}] - Failed to parse functions: {ex.Message}");
+            _logger.LogError($"[{server}].[{database}] - Failed to parse functions: {ex.Message}");
             return new List<FunctionDefinition>();
         }
     }
@@ -1348,7 +1356,7 @@ public class ModelXmlParserService
         }
         catch (Exception ex)
         {
-            ConsoleLogger.LogError($"[{server}].[{database}] - Failed to generate discovery report: {ex.Message}");
+            _logger.LogError($"[{server}].[{database}] - Failed to generate discovery report: {ex.Message}");
             return new ElementDiscoveryReport { Server = server, Database = database };
         }
     }

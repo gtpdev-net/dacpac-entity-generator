@@ -1,11 +1,19 @@
 using System.Text;
-using DacpacEntityGenerator.Models;
-using DacpacEntityGenerator.Utilities;
+using DacpacEntityGenerator.Core.Abstractions;
+using DacpacEntityGenerator.Core.Models;
+using DacpacEntityGenerator.Core.Utilities;
 
-namespace DacpacEntityGenerator.Services;
+namespace DacpacEntityGenerator.Core.Services;
 
 public class FileWriterService
 {
+    private readonly IGenerationLogger _logger;
+
+    public FileWriterService(IGenerationLogger logger)
+    {
+        _logger = logger;
+    }
+
     public bool WriteEntityFile(
         string outputDirectory,
         string server,
@@ -32,13 +40,13 @@ public class FileWriterService
 
             // Get relative path for logging
             var relativePath = Path.GetRelativePath(outputDirectory, filePath);
-            ConsoleLogger.LogProgress($"[{server}].[{database}].[{schema}].[{tableName}] - Generated entity: ./output/{relativePath.Replace('\\', '/')}");
+            _logger.LogProgress($"[{server}].[{database}].[{schema}].[{tableName}] - Generated entity: ./output/{relativePath.Replace('\\', '/')}");
 
             return true;
         }
         catch (Exception ex)
         {
-            ConsoleLogger.LogError($"[{server}].[{database}].[{schema}].[{tableName}] - Failed to write entity file for table {tableName}: {ex.Message}");
+            _logger.LogError($"[{server}].[{database}].[{schema}].[{tableName}] - Failed to write entity file for table {tableName}: {ex.Message}");
             return false;
         }
     }
@@ -48,7 +56,7 @@ public class FileWriterService
         if (!Directory.Exists(outputDirectory))
         {
             Directory.CreateDirectory(outputDirectory);
-            ConsoleLogger.LogInfo($"Created output directory: {outputDirectory}");
+            _logger.LogInfo($"Created output directory: {outputDirectory}");
         }
     }
 
@@ -57,7 +65,7 @@ public class FileWriterService
         if (Directory.Exists(outputDirectory) && force)
         {
             Directory.Delete(outputDirectory, true);
-            ConsoleLogger.LogInfo($"Cleaned output directory: {outputDirectory}");
+            _logger.LogInfo($"Cleaned output directory: {outputDirectory}");
         }
     }
 
@@ -86,13 +94,13 @@ public class FileWriterService
 
             // Get relative path for logging
             var relativePath = Path.GetRelativePath(outputDirectory, filePath);
-            ConsoleLogger.LogProgress($"[{server}].[{database}] - Generated configuration: ./output/{relativePath.Replace('\\', '/')}");
+            _logger.LogProgress($"[{server}].[{database}] - Generated configuration: ./output/{relativePath.Replace('\\', '/')}");
 
             return true;
         }
         catch (Exception ex)
         {
-            ConsoleLogger.LogError($"[{server}].[{database}] - Failed to write configuration file: {ex.Message}");
+            _logger.LogError($"[{server}].[{database}] - Failed to write configuration file: {ex.Message}");
             return false;
         }
     }
@@ -124,13 +132,13 @@ public class FileWriterService
 
             // Get relative path for logging
             var relativePath = Path.GetRelativePath(outputDirectory, filePath);
-            ConsoleLogger.LogProgress($"[{server}].[{database}].[{schema}].[{viewName}] - Generated view entity: ./output/{relativePath.Replace('\\', '/')}");
+            _logger.LogProgress($"[{server}].[{database}].[{schema}].[{viewName}] - Generated view entity: ./output/{relativePath.Replace('\\', '/')}");
 
             return true;
         }
         catch (Exception ex)
         {
-            ConsoleLogger.LogError($"[{server}].[{database}].[{schema}].[{viewName}] - Failed to write view file: {ex.Message}");
+            _logger.LogError($"[{server}].[{database}].[{schema}].[{viewName}] - Failed to write view file: {ex.Message}");
             return false;
         }
     }
@@ -153,13 +161,13 @@ public class FileWriterService
 
             // Get relative path for logging
             var relativePath = Path.GetRelativePath(outputDirectory, filePath);
-            ConsoleLogger.LogProgress($"Generated DbContext: ./output/{relativePath.Replace('\\', '/')}");
+            _logger.LogProgress($"Generated DbContext: ./output/{relativePath.Replace('\\', '/')}");
 
             return true;
         }
         catch (Exception ex)
         {
-            ConsoleLogger.LogError($"Failed to write DbContext file: {ex.Message}");
+            _logger.LogError($"Failed to write DbContext file: {ex.Message}");
             return false;
         }
     }

@@ -1,19 +1,27 @@
 using ClosedXML.Excel;
-using DacpacEntityGenerator.Models;
-using DacpacEntityGenerator.Utilities;
+using DacpacEntityGenerator.Core.Abstractions;
+using DacpacEntityGenerator.Core.Models;
+using DacpacEntityGenerator.Core.Utilities;
 using DocumentFormat.OpenXml.Wordprocessing;
 
-namespace DacpacEntityGenerator.Services;
+namespace DacpacEntityGenerator.Core.Services;
 
 public class ExcelReaderService
 {
+    private readonly IGenerationLogger _logger;
+
+    public ExcelReaderService(IGenerationLogger logger)
+    {
+        _logger = logger;
+    }
+
     public string? FindExcelFile(string inputDirectory)
     {
-        ConsoleLogger.LogInfo($"Scanning for Excel files in {inputDirectory}");
+        _logger.LogInfo($"Scanning for Excel files in {inputDirectory}");
         
         if (!Directory.Exists(inputDirectory))
         {
-            ConsoleLogger.LogError($"Input directory does not exist: {inputDirectory}");
+            _logger.LogError($"Input directory does not exist: {inputDirectory}");
             return null;
         }
 
@@ -21,16 +29,16 @@ public class ExcelReaderService
         
         if (excelFiles.Length == 0)
         {
-            ConsoleLogger.LogWarning("No Excel file found in ./input/ folder");
+            _logger.LogWarning("No Excel file found in ./input/ folder");
             return null;
         }
 
         var selectedFile = excelFiles[0];
-        ConsoleLogger.LogProgress($"Found Excel file: {Path.GetFileName(selectedFile)}");
+        _logger.LogProgress($"Found Excel file: {Path.GetFileName(selectedFile)}");
         
         if (excelFiles.Length > 1)
         {
-            ConsoleLogger.LogWarning($"Multiple Excel files found, using: {Path.GetFileName(selectedFile)}");
+            _logger.LogWarning($"Multiple Excel files found, using: {Path.GetFileName(selectedFile)}");
         }
 
         return selectedFile;
@@ -49,7 +57,7 @@ public class ExcelReaderService
             var headerRow = worksheet.FirstRowUsed();
             if (headerRow == null)
             {
-                ConsoleLogger.LogError("Excel file is empty");
+                _logger.LogError("Excel file is empty");
                 return new List<ExcelRow>();
             }
 
@@ -84,31 +92,31 @@ public class ExcelReaderService
                 }
                 catch (Exception ex)
                 {
-                    ConsoleLogger.LogWarning($"Failed to parse row {row.RowNumber()}: {ex.Message}");
+                    _logger.LogWarning($"Failed to parse row {row.RowNumber()}: {ex.Message}");
                 }
             }
 
-            ConsoleLogger.LogInfo($"Loaded {allRows.Count} rows from Excel");
+            _logger.LogInfo($"Loaded {allRows.Count} rows from Excel");
 
             // Apply filtering
             var filteredRows = allRows
                 .Where(r => (r.Generate && r.DevPersistenceType.Equals("R", StringComparison.OrdinalIgnoreCase)))
                 .ToList();
 
-            ConsoleLogger.LogProgress($"Filtered to {filteredRows.Count} rows (Table in DAO Analysis = TRUE, Added by API = TRUE, Persistence Type = 'R', DEV Persistence Type = 'R')");
+            _logger.LogProgress($"Filtered to {filteredRows.Count} rows (Table in DAO Analysis = TRUE, Added by API = TRUE, Persistence Type = 'R', DEV Persistence Type = 'R')");
 
             // Group and log summary
             var serverCount = filteredRows.Select(r => r.Server).Distinct().Count();
             var dbCount = filteredRows.Select(r => new { r.Server, r.Database }).Distinct().Count();
             var tableCount = filteredRows.Select(r => new { r.Server, r.Database, r.Schema, r.Table }).Distinct().Count();
             
-            ConsoleLogger.LogInfo($"Grouped into {serverCount} servers, {dbCount} databases, {tableCount} tables");
+            _logger.LogInfo($"Grouped into {serverCount} servers, {dbCount} databases, {tableCount} tables");
 
             return filteredRows;
         }
         catch (Exception ex)
         {
-            ConsoleLogger.LogError($"Failed to read Excel file: {ex.Message}");
+            _logger.LogError($"Failed to read Excel file: {ex.Message}");
             return new List<ExcelRow>();
         }
     }
@@ -140,8 +148,8 @@ public class ExcelReaderService
 
         if (missingColumns.Any())
         {
-            ConsoleLogger.LogError($"Excel file is missing required columns: {string.Join(", ", missingColumns)}");
-            ConsoleLogger.LogError("Expected columns: Server, Database, Schema, Table, Column, Table in DAO Analysis, Added by API, Persistence Type, DEV Persistence Type, Generate");
+            _logger.LogError($"Excel file is missing required columns: {string.Join(", ", missingColumns)}");
+            _logger.LogError("Expected columns: Server, Database, Schema, Table, Column, Table in DAO Analysis, Added by API, Persistence Type, DEV Persistence Type, Generate");
             return false;
         }
 

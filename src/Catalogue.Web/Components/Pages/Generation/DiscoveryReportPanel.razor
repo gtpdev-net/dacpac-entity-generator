@@ -1,0 +1,107 @@
+@using DacpacEntityGenerator.Core.Models
+
+@if (Report is not null)
+{
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-secondary text-white">
+            <strong>@Report.Server</strong>
+            @if (!string.IsNullOrWhiteSpace(Report.Database))
+            {
+                <span class="ms-2 opacity-75">&rsaquo; @Report.Database</span>
+            }
+        </div>
+        <div class="card-body">
+
+            @* Summary counts *@
+            <div class="row g-2 mb-3">
+                @foreach (var (label, count, color) in new (string, int, string)[]
+                {
+                    ("Stored Procs",        Report.StoredProcedures.Count,    "info"),
+                    ("Triggers",            Report.Triggers.Count,            "warning"),
+                    ("Sequences",           Report.Sequences.Count,           "primary"),
+                    ("Extended Props",      Report.ExtendedProperties.Count,  "secondary"),
+                    ("Spatial Cols",        Report.SpatialColumns.Count,      "danger"),
+                    ("HierarchyId Cols",    Report.HierarchyIdColumns.Count,  "dark"),
+                    ("Non-default Collations", Report.NonDefaultCollations.Count, "light"),
+                })
+                {
+                    <div class="col-auto">
+                        <span class="badge bg-@color text-@(color == "light" ? "dark" : "white") fs-6">
+                            @label: @count
+                        </span>
+                    </div>
+                }
+            </div>
+
+            @if (Report.UnhandledElementTypes.Count > 0)
+            {
+                <div class="alert alert-warning py-2">
+                    <strong>Unhandled element types:</strong>
+                    @string.Join(", ", Report.UnhandledElementTypes)
+                </div>
+            }
+
+            @RenderDetailTable("Stored Procedures", Report.StoredProcedures)
+            @RenderDetailTable("Triggers", Report.Triggers)
+            @RenderDetailTable("Sequences", Report.Sequences)
+            @RenderDetailTable("Extended Properties", Report.ExtendedProperties)
+            @RenderDetailTable("Spatial Columns", Report.SpatialColumns)
+            @RenderDetailTable("HierarchyId Columns", Report.HierarchyIdColumns)
+            @RenderDetailTable("Non-default Collations", Report.NonDefaultCollations)
+
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public ElementDiscoveryReport? Report { get; set; }
+
+    private RenderFragment RenderDetailTable(string title, List<ElementDetail> items) => __builder =>
+    {
+        if (items.Count == 0) return;
+
+        __builder.OpenElement(0, "div");
+        __builder.AddAttribute(1, "class", "mb-3");
+
+        __builder.OpenElement(2, "h6");
+        __builder.AddAttribute(3, "class", "text-muted fw-semibold mb-1");
+        __builder.AddContent(4, $"{title} ({items.Count})");
+        __builder.CloseElement();
+
+        __builder.OpenElement(5, "div");
+        __builder.AddAttribute(6, "class", "table-responsive");
+
+        __builder.OpenElement(7, "table");
+        __builder.AddAttribute(8, "class", "table table-sm table-bordered table-hover small mb-0");
+
+        // thead
+        __builder.OpenElement(9, "thead");
+        __builder.AddAttribute(10, "class", "table-light");
+        __builder.OpenElement(11, "tr");
+        foreach (var col in new[] { "Name", "Location", "Type", "Details" })
+        {
+            __builder.OpenElement(12, "th");
+            __builder.AddContent(13, col);
+            __builder.CloseElement();
+        }
+        __builder.CloseElement(); // tr
+        __builder.CloseElement(); // thead
+
+        // tbody
+        __builder.OpenElement(14, "tbody");
+        foreach (var item in items)
+        {
+            __builder.OpenElement(15, "tr");
+            __builder.OpenElement(16, "td"); __builder.AddContent(17, item.Name); __builder.CloseElement();
+            __builder.OpenElement(18, "td"); __builder.AddContent(19, item.Location); __builder.CloseElement();
+            __builder.OpenElement(20, "td"); __builder.AddContent(21, item.Type); __builder.CloseElement();
+            __builder.OpenElement(22, "td"); __builder.AddContent(23, item.Details); __builder.CloseElement();
+            __builder.CloseElement(); // tr
+        }
+        __builder.CloseElement(); // tbody
+
+        __builder.CloseElement(); // table
+        __builder.CloseElement(); // table-responsive
+        __builder.CloseElement(); // div
+    };
+}

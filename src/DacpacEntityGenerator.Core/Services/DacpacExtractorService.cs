@@ -1,10 +1,18 @@
 using System.IO.Compression;
-using DacpacEntityGenerator.Utilities;
+using DacpacEntityGenerator.Core.Abstractions;
+using DacpacEntityGenerator.Core.Utilities;
 
-namespace DacpacEntityGenerator.Services;
+namespace DacpacEntityGenerator.Core.Services;
 
 public class DacpacExtractorService
 {
+    private readonly IGenerationLogger _logger;
+
+    public DacpacExtractorService(IGenerationLogger logger)
+    {
+        _logger = logger;
+    }
+
     public string? ExtractModelXml(string inputDirectory, string server, string database)
     {
         var dacpacFileName = $"{server}_{database}.dacpac";
@@ -12,11 +20,11 @@ public class DacpacExtractorService
 
         if (!File.Exists(dacpacPath))
         {
-            ConsoleLogger.LogError($"[{server}].[{database}] - DACPAC file not found: {dacpacFileName}");
+            _logger.LogError($"[{server}].[{database}] - DACPAC file not found: {dacpacFileName}");
             return null;
         }
 
-        ConsoleLogger.LogProgress($"[{server}].[{database}] - Processing DACPAC: {dacpacFileName}");
+        _logger.LogProgress($"[{server}].[{database}] - Processing DACPAC: {dacpacFileName}");
 
         try
         {
@@ -26,7 +34,7 @@ public class DacpacExtractorService
 
             if (modelEntry == null)
             {
-                ConsoleLogger.LogError($"[{server}].[{database}] - model.xml not found in DACPAC: {dacpacFileName}");
+                _logger.LogError($"[{server}].[{database}] - model.xml not found in DACPAC: {dacpacFileName}");
                 return null;
             }
 
@@ -35,18 +43,18 @@ public class DacpacExtractorService
             var modelXml = reader.ReadToEnd();
 
             var sizeKB = modelXml.Length / 1024;
-            ConsoleLogger.LogInfo($"[{server}].[{database}] - Extracted model.xml ({sizeKB} KB)");
+            _logger.LogInfo($"[{server}].[{database}] - Extracted model.xml ({sizeKB} KB)");
 
             return modelXml;
         }
         catch (InvalidDataException ex)
         {
-            ConsoleLogger.LogError($"[{server}].[{database}] - Corrupted DACPAC file: {dacpacFileName} - {ex.Message}");
+            _logger.LogError($"[{server}].[{database}] - Corrupted DACPAC file: {dacpacFileName} - {ex.Message}");
             return null;
         }
         catch (Exception ex)
         {
-            ConsoleLogger.LogError($"[{server}].[{database}] - Failed to extract model.xml from {dacpacFileName}: {ex.Message}");
+            _logger.LogError($"[{server}].[{database}] - Failed to extract model.xml from {dacpacFileName}: {ex.Message}");
             return null;
         }
     }
