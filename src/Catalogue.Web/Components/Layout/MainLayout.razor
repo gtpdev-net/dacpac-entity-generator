@@ -1,10 +1,11 @@
 ﻿@inherits LayoutComponentBase
+@inject IConfiguration Configuration
 
 <div class="d-flex" style="min-height: 100vh;">
     <!-- Sidebar -->
     <nav class="d-flex flex-column flex-shrink-0 bg-dark text-white p-3" style="width:250px;">
         <a href="/" class="d-flex align-items-center mb-3 text-white text-decoration-none">
-            <span class="fs-5 fw-bold">&#128218; Source Catalogue</span>
+            <span class="fs-5 fw-bold">&#128218; @Configuration["ApplicationName"] Migration</span>
         </a>
         <hr class="border-secondary" />
         <NavMenu />
