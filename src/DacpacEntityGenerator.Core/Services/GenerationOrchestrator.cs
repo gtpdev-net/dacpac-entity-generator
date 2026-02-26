@@ -1,3 +1,4 @@
+using System.Xml.Linq;
 using DacpacEntityGenerator.Core.Abstractions;
 using DacpacEntityGenerator.Core.Models;
 using DacpacEntityGenerator.Core.Utilities;
@@ -112,8 +113,18 @@ public class GenerationOrchestrator
                     continue;
                 }
 
+                // Parse and validate the model XML once for this database
+                var doc = _modelXmlParser.PrepareDocument(modelXml, server, database);
+                if (doc == null)
+                {
+                    var errorMsg = $"Failed to parse or validate model.xml from DACPAC: {server}_{database}.dacpac";
+                    result.Errors.Add(errorMsg);
+                    result.ErrorsEncountered++;
+                    continue;
+                }
+
                 // Discovery report
-                var discoveryReport = _modelXmlParser.GenerateDiscoveryReport(modelXml, server, database);
+                var discoveryReport = _modelXmlParser.GenerateDiscoveryReport(doc, server, database);
                 allDiscoveryReports.Add(discoveryReport);
                 _logger.LogInfo(
                     $"[{server}].[{database}] - Discovery: " +
@@ -123,7 +134,7 @@ public class GenerationOrchestrator
 
                 // Parse and write view entities
                 _logger.LogInfo($"[{server}].[{database}] - Parsing views from DACPAC");
-                var views = _modelXmlParser.ParseViews(modelXml, server, database);
+                var views = _modelXmlParser.ParseViews(doc, server, database);
 
                 foreach (var view in views)
                 {
@@ -159,7 +170,7 @@ public class GenerationOrchestrator
                     var tableName       = tableGroup.Key.Table;
                     var requiredColumns = tableGroup.Select(r => r.Column).Distinct().ToList();
 
-                    var tableDefinition = _modelXmlParser.ParseTable(modelXml, server, database, schema, tableName, requiredColumns);
+                    var tableDefinition = _modelXmlParser.ParseTable(doc, server, database, schema, tableName, requiredColumns);
                     if (tableDefinition == null)
                     {
                         result.TablesSkipped++;

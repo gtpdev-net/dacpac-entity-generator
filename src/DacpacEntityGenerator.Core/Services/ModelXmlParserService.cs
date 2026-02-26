@@ -16,8 +16,27 @@ public class ModelXmlParserService
 
     private XNamespace _dacNamespace = "http://schemas.microsoft.com/sqlserver/dac/Serialization/2012/02";
 
+    /// <summary>
+    /// Parses and validates the model.xml string once per database.
+    /// Returns the XDocument to pass into the individual Parse* methods,
+    /// or null if the document is invalid.
+    /// </summary>
+    public XDocument? PrepareDocument(string modelXml, string server, string database)
+    {
+        try
+        {
+            var doc = XDocument.Parse(modelXml);
+            return ValidateDacpacFormat(doc, server, database) ? doc : null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"[{server}].[{database}] - Failed to parse model XML: {ex.Message}");
+            return null;
+        }
+    }
+
     public TableDefinition? ParseTable(
-        string modelXml,
+        XDocument doc,
         string server,
         string database,
         string schema,
@@ -26,14 +45,6 @@ public class ModelXmlParserService
     {
         try
         {
-            var doc = XDocument.Parse(modelXml);
-
-            // Validate DACPAC file format
-            if (!ValidateDacpacFormat(doc, server, database))
-            {
-                return null;
-            }
-
             // Find the table element
             var tableElement = FindTableElement(doc, schema, tableName);
             if (tableElement == null)
@@ -947,11 +958,10 @@ public class ModelXmlParserService
             .ToList();
     }
 
-    public List<ViewDefinition> ParseViews(string modelXml, string server, string database)
+    public List<ViewDefinition> ParseViews(XDocument doc, string server, string database)
     {
         try
         {
-            var doc = XDocument.Parse(modelXml);
             var views = new List<ViewDefinition>();
 
             // Find all view elements
@@ -1161,11 +1171,10 @@ public class ModelXmlParserService
         return uniqueConstraints;
     }
 
-    public List<FunctionDefinition> ParseUserDefinedFunctions(string modelXml, string server, string database)
+    public List<FunctionDefinition> ParseUserDefinedFunctions(XDocument doc, string server, string database)
     {
         try
         {
-            var doc = XDocument.Parse(modelXml);
             var functions = new List<FunctionDefinition>();
 
             // Find all function elements
@@ -1233,11 +1242,10 @@ public class ModelXmlParserService
         }
     }
 
-    public ElementDiscoveryReport GenerateDiscoveryReport(string modelXml, string server, string database)
+    public ElementDiscoveryReport GenerateDiscoveryReport(XDocument doc, string server, string database)
     {
         try
         {
-            var doc = XDocument.Parse(modelXml);
             var report = new ElementDiscoveryReport
             {
                 Server = server,

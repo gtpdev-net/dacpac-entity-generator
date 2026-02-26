@@ -303,8 +303,11 @@
     // ── Logger callback ───────────────────────────────────────────────────────
     private void HandleLog(string level, string message)
     {
-        _logLines.Add(new LogEntry(level, message));
-        InvokeAsync(StateHasChanged);
+        InvokeAsync(() =>
+        {
+            _logLines.Add(new LogEntry(level, message));
+            StateHasChanged();
+        });
     }
 
     // ── UI helpers ────────────────────────────────────────────────────────────
