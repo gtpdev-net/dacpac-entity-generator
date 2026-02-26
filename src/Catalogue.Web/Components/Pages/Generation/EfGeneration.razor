@@ -237,9 +237,11 @@
             // Copy Excel file
             File.Copy(excelPath, Path.Combine(tempInput, Path.GetFileName(excelPath)), overwrite: true);
 
-            // Copy all DACPAC files from DACPAC folder
+            // Copy all DACPAC files into the 'dacpacs' subdirectory that DacpacExtractorService expects
+            var tempDacpacs = Path.Combine(tempInput, "dacpacs");
+            Directory.CreateDirectory(tempDacpacs);
             foreach (var dacpac in Directory.EnumerateFiles(dacpacFolder, "*.dacpac", SearchOption.TopDirectoryOnly))
-                File.Copy(dacpac, Path.Combine(tempInput, Path.GetFileName(dacpac)), overwrite: true);
+                File.Copy(dacpac, Path.Combine(tempDacpacs, Path.GetFileName(dacpac)), overwrite: true);
 
             // 2. Run orchestrator on background thread
             GenerationResult result = await Task.Run(() => Orchestrator.Run(tempInput, tempOutput));
