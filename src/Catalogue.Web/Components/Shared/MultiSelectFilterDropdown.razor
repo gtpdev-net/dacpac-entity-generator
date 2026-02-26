@@ -2,14 +2,14 @@
 @implements IAsyncDisposable
 
 <div class="msd-container" @ref="_container">
-    <button class="btn btn-outline-secondary btn-sm msd-toggle w-100 d-flex justify-content-between align-items-center"
+    <button class="btn btn-outline-secondary btn-sm msd-toggle w-100 d-flex justify-content-between align-items-center @(SelectedValues.Count > 0 ? "msd-toggle--active" : "")"
             type="button"
             @onclick="ToggleOpen"
             @onclick:stopPropagation="true">
         <span class="text-truncate me-1">
             @if (SelectedValues.Count > 0)
             {
-                @Label<span class="badge text-bg-primary ms-1">@SelectedValues.Count</span>
+                @Label<span class="ms-1">@SelectedValues.Count selected</span>
             }
             else
             {
