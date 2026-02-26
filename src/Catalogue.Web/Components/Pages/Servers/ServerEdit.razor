@@ -4,8 +4,9 @@
 @inject ICatalogueRepository Repository
 @inject NavigationManager Nav
 @inject NotificationService Notify
+@inject IConfiguration Configuration
 
-<PageTitle>@(SourceId == null ? "New Server" : "Edit Server") &mdash; Source Catalogue</PageTitle>
+<PageTitle>@(SourceId == null ? "New Server" : "Edit Server") &mdash; @Configuration["AppTitle"] Migration</PageTitle>
 
 <BreadcrumbNav Items="@_breadcrumbs" />
 

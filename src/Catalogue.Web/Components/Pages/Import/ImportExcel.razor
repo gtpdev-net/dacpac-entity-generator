@@ -3,8 +3,9 @@
 @inject ExcelImportService ExcelParser
 @inject CatalogueImportService Importer
 @inject NotificationService Notify
+@inject IConfiguration Configuration
 
-<PageTitle>Import Excel &mdash; Source Catalogue</PageTitle>
+<PageTitle>Import Excel &mdash; @Configuration["AppTitle"] Migration</PageTitle>
 
 <h1>Import Excel</h1>
 

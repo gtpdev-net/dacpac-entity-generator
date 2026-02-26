@@ -3,37 +3,51 @@
 @inject ICatalogueRepository Repository
 @inject NavigationManager Nav
 @inject NotificationService Notify
+@inject IConfiguration Configuration
 
-<PageTitle>Global Catalogue &mdash; Source Catalogue</PageTitle>
+<PageTitle>Migration Selection &mdash; @Configuration["AppTitle"] Migration</PageTitle>
 
-<h1 class="mb-3">Global Catalogue</h1>
+<h1 class="mb-3">Migration Selection</h1>
 
 <!-- Filter bar -->
 <div class="card mb-3">
     <div class="card-body">
         <div class="row g-2">
-            <div class="col-md-3">
-                <input class="form-control form-control-sm" placeholder="Server..." @bind="_filterServer" @bind:event="oninput" />
+            <div class="col-md-2">
+                <MultiSelectFilterDropdown Label="Server"
+                    AvailableOptions="AvailableServers"
+                    SelectedValues="_selectedServers"
+                    SelectedValuesChanged="v => { _selectedServers = v; _page = 1; }" />
             </div>
-            <div class="col-md-3">
-                <input class="form-control form-control-sm" placeholder="Database..." @bind="_filterDatabase" @bind:event="oninput" />
+            <div class="col-md-2">
+                <MultiSelectFilterDropdown Label="Database"
+                    AvailableOptions="AvailableDatabases"
+                    SelectedValues="_selectedDatabases"
+                    SelectedValuesChanged="v => { _selectedDatabases = v; _page = 1; }" />
             </div>
-            <div class="col-md-3">
-                <input class="form-control form-control-sm" placeholder="Schema..." @bind="_filterSchema" @bind:event="oninput" />
+            <div class="col-md-2">
+                <MultiSelectFilterDropdown Label="Schema"
+                    AvailableOptions="AvailableSchemas"
+                    SelectedValues="_selectedSchemas"
+                    SelectedValuesChanged="v => { _selectedSchemas = v; _page = 1; }" />
             </div>
-            <div class="col-md-3">
-                <input class="form-control form-control-sm" placeholder="Table..." @bind="_filterTable" @bind:event="oninput" />
+            <div class="col-md-2">
+                <MultiSelectFilterDropdown Label="Table"
+                    AvailableOptions="AvailableTables"
+                    SelectedValues="_selectedTables"
+                    SelectedValuesChanged="v => { _selectedTables = v; _page = 1; }" />
             </div>
-            <div class="col-md-3">
-                <input class="form-control form-control-sm" placeholder="Column..." @bind="_filterColumn" @bind:event="oninput" />
+            <div class="col-md-2">
+                <MultiSelectFilterDropdown Label="Column"
+                    AvailableOptions="AvailableColumns"
+                    SelectedValues="_selectedColumns"
+                    SelectedValuesChanged="v => { _selectedColumns = v; _page = 1; }" />
             </div>
-            <div class="col-md-3">
-                <select class="form-select form-select-sm" @bind="_filterPersistence">
-                    <option value="">Any Type</option>
-                    <option value="R">Relational (R)</option>
-                    <option value="D">Document (D)</option>
-                    <option value="B">Both (B)</option>
-                </select>
+            <div class="col-md-2">
+                <MultiSelectFilterDropdown Label="Type"
+                    AvailableOptions="AvailablePersistence"
+                    SelectedValues="_selectedPersistence"
+                    SelectedValuesChanged="v => { _selectedPersistence = v; _page = 1; }" />
             </div>
         </div>
 
@@ -156,7 +170,12 @@ else
 
 @code {
     private List<SourceColumnInfo>? _all;
-    private string _filterServer = "", _filterDatabase = "", _filterSchema = "", _filterTable = "", _filterColumn = "", _filterPersistence = "";
+    private HashSet<string> _selectedServers     = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> _selectedDatabases   = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> _selectedSchemas     = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> _selectedTables      = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> _selectedColumns     = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> _selectedPersistence = new(StringComparer.OrdinalIgnoreCase);
     private string _sortBy = "server";
     private bool _sortAsc = true;
     private int _page = 1;
@@ -182,18 +201,52 @@ else
         _all = cols.ToList();
     }
 
+    // ── Available options (cascade: each field excludes its own filter so selection is not self-restricting) ──
+    private IReadOnlyList<string> AvailableServers     => GetFilteredExcluding("server").Select(c => c.ServerName).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
+    private IReadOnlyList<string> AvailableDatabases   => GetFilteredExcluding("database").Select(c => c.DatabaseName).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
+    private IReadOnlyList<string> AvailableSchemas     => GetFilteredExcluding("schema").Select(c => c.SchemaName).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
+    private IReadOnlyList<string> AvailableTables      => GetFilteredExcluding("table").Select(c => c.TableName).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
+    private IReadOnlyList<string> AvailableColumns     => GetFilteredExcluding("column").Select(c => c.ColumnName).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
+    private IReadOnlyList<string> AvailablePersistence => GetFilteredExcluding("persistence").Select(c => c.PersistenceType.ToString()).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
+
+    // Returns _all with every active filter applied *except* the named field (so that field's dropdown shows all reachable values)
+    private IEnumerable<SourceColumnInfo> GetFilteredExcluding(string excludeField)
+    {
+        if (_all is null) return [];
+        var q = _all.AsEnumerable();
+        if (excludeField != "server"      && _selectedServers.Count > 0)     q = q.Where(c => _selectedServers.Contains(c.ServerName));
+        if (excludeField != "database"    && _selectedDatabases.Count > 0)   q = q.Where(c => _selectedDatabases.Contains(c.DatabaseName));
+        if (excludeField != "schema"      && _selectedSchemas.Count > 0)     q = q.Where(c => _selectedSchemas.Contains(c.SchemaName));
+        if (excludeField != "table"       && _selectedTables.Count > 0)      q = q.Where(c => _selectedTables.Contains(c.TableName));
+        if (excludeField != "column"      && _selectedColumns.Count > 0)     q = q.Where(c => _selectedColumns.Contains(c.ColumnName));
+        if (excludeField != "persistence" && _selectedPersistence.Count > 0) q = q.Where(c => _selectedPersistence.Contains(c.PersistenceType.ToString()));
+        return ApplyPresetFilter(q);
+    }
+
+    private IEnumerable<SourceColumnInfo> ApplyPresetFilter(IEnumerable<SourceColumnInfo> q) => ActivePreset switch
+    {
+        "unreviewed" => q.Where(c => !c.IsInDaoAnalysis && !c.IsAddedByApi),
+        "inScope"    => q.Where(c => c.IsInDaoAnalysis || c.IsAddedByApi),
+        "forLoad"    => q.Where(c => c.IsSelectedForLoad),
+        "docCols"    => q.Where(c => c.PersistenceType == 'D' || c.PersistenceType == 'B'),
+        "daoOnly"    => q.Where(c => c.IsInDaoAnalysis),
+        "apiAdded"   => q.Where(c => c.IsAddedByApi),
+        _            => q
+    };
+
     private List<SourceColumnInfo> Filtered
     {
         get
         {
             if (_all is null) return [];
             var q = _all.AsEnumerable();
-            if (!string.IsNullOrEmpty(_filterServer))   q = q.Where(c => c.ServerName.Contains(_filterServer, StringComparison.OrdinalIgnoreCase));
-            if (!string.IsNullOrEmpty(_filterDatabase)) q = q.Where(c => c.DatabaseName.Contains(_filterDatabase, StringComparison.OrdinalIgnoreCase));
-            if (!string.IsNullOrEmpty(_filterSchema))   q = q.Where(c => c.SchemaName.Contains(_filterSchema, StringComparison.OrdinalIgnoreCase));
-            if (!string.IsNullOrEmpty(_filterTable))    q = q.Where(c => c.TableName.Contains(_filterTable, StringComparison.OrdinalIgnoreCase));
-            if (!string.IsNullOrEmpty(_filterColumn))   q = q.Where(c => c.ColumnName.Contains(_filterColumn, StringComparison.OrdinalIgnoreCase));
-            if (!string.IsNullOrEmpty(_filterPersistence)) q = q.Where(c => c.PersistenceType.ToString() == _filterPersistence);
+            if (_selectedServers.Count > 0)     q = q.Where(c => _selectedServers.Contains(c.ServerName));
+            if (_selectedDatabases.Count > 0)   q = q.Where(c => _selectedDatabases.Contains(c.DatabaseName));
+            if (_selectedSchemas.Count > 0)     q = q.Where(c => _selectedSchemas.Contains(c.SchemaName));
+            if (_selectedTables.Count > 0)      q = q.Where(c => _selectedTables.Contains(c.TableName));
+            if (_selectedColumns.Count > 0)     q = q.Where(c => _selectedColumns.Contains(c.ColumnName));
+            if (_selectedPersistence.Count > 0) q = q.Where(c => _selectedPersistence.Contains(c.PersistenceType.ToString()));
+            q = ApplyPresetFilter(q);
             return ApplySort(q.ToList());
         }
     }
@@ -240,11 +293,27 @@ else
     private void ApplyPreset(string key)
     {
         ActivePreset = ActivePreset == key ? "" : key;
-        _filterServer = _filterDatabase = _filterSchema = _filterTable = _filterColumn = _filterPersistence = "";
+        // Clear all multi-select filters when switching presets so the preset is the sole constraint
+        _selectedServers     = new(StringComparer.OrdinalIgnoreCase);
+        _selectedDatabases   = new(StringComparer.OrdinalIgnoreCase);
+        _selectedSchemas     = new(StringComparer.OrdinalIgnoreCase);
+        _selectedTables      = new(StringComparer.OrdinalIgnoreCase);
+        _selectedColumns     = new(StringComparer.OrdinalIgnoreCase);
+        _selectedPersistence = new(StringComparer.OrdinalIgnoreCase);
         _page = 1;
     }
 
-    private void ClearPresets() { ActivePreset = ""; _page = 1; }
+    private void ClearPresets()
+    {
+        ActivePreset = "";
+        _selectedServers     = new(StringComparer.OrdinalIgnoreCase);
+        _selectedDatabases   = new(StringComparer.OrdinalIgnoreCase);
+        _selectedSchemas     = new(StringComparer.OrdinalIgnoreCase);
+        _selectedTables      = new(StringComparer.OrdinalIgnoreCase);
+        _selectedColumns     = new(StringComparer.OrdinalIgnoreCase);
+        _selectedPersistence = new(StringComparer.OrdinalIgnoreCase);
+        _page = 1;
+    }
 
     private async Task ToggleFlag(SourceColumnInfo info, Action<SourceColumn> toggle)
     {
@@ -292,11 +361,14 @@ else
 
     private void ExportCsv()
     {
-        // CSV export handled via a streaming endpoint; navigate to it with current filter state
-        Nav.NavigateTo($"/api/catalogue/export?server={Uri.EscapeDataString(_filterServer)}" +
-                       $"&database={Uri.EscapeDataString(_filterDatabase)}" +
-                       $"&table={Uri.EscapeDataString(_filterTable)}" +
-                       $"&column={Uri.EscapeDataString(_filterColumn)}" +
-                       $"&persistence={_filterPersistence}");
+        // CSV export handled via a streaming endpoint; pass active filter values as comma-separated query params
+        static string Join(HashSet<string> s) => Uri.EscapeDataString(string.Join(",", s));
+        Nav.NavigateTo($"/api/catalogue/export?server={Join(_selectedServers)}" +
+                       $"&database={Join(_selectedDatabases)}" +
+                       $"&schema={Join(_selectedSchemas)}" +
+                       $"&table={Join(_selectedTables)}" +
+                       $"&column={Join(_selectedColumns)}" +
+                       $"&persistence={Join(_selectedPersistence)}" +
+                       $"&preset={Uri.EscapeDataString(ActivePreset)}");
     }
 }

@@ -1,0 +1,158 @@
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<div class="msd-container" @ref="_container">
+    <button class="btn btn-outline-secondary btn-sm msd-toggle w-100 d-flex justify-content-between align-items-center"
+            type="button"
+            @onclick="ToggleOpen"
+            @onclick:stopPropagation="true">
+        <span class="text-truncate me-1">
+            @if (SelectedValues.Count > 0)
+            {
+                @Label<span class="badge text-bg-primary ms-1">@SelectedValues.Count</span>
+            }
+            else
+            {
+                @Label
+            }
+        </span>
+        <span class="msd-caret @(_isOpen ? "msd-caret-open" : "")">&#9660;</span>
+    </button>
+
+    @if (_isOpen)
+    {
+        <div class="msd-menu shadow-sm" @onclick:stopPropagation="true">
+            <!-- Search input -->
+            <div class="p-2 border-bottom">
+                <input class="form-control form-control-sm"
+                       placeholder="Search..."
+                       @bind="_search"
+                       @bind:event="oninput"
+                       @ref="_searchInput" />
+            </div>
+
+            <!-- Select all / clear -->
+            <div class="px-2 py-1 border-bottom d-flex gap-2 msd-actions">
+                <a href="#" class="small" @onclick="SelectAll" @onclick:preventDefault="true">Select all</a>
+                <span class="text-muted small">|</span>
+                <a href="#" class="small" @onclick="ClearSelection" @onclick:preventDefault="true">Clear</a>
+                @if (!string.IsNullOrEmpty(_search))
+                {
+                    <span class="text-muted small ms-auto">@FilteredOptions.Count() of @AvailableOptions.Count</span>
+                }
+                else
+                {
+                    <span class="text-muted small ms-auto">@AvailableOptions.Count item@(AvailableOptions.Count == 1 ? "" : "s")</span>
+                }
+            </div>
+
+            <!-- Options list -->
+            <div class="msd-options">
+                @foreach (var opt in FilteredOptions)
+                {
+                    var o = opt; // closure capture
+                    <label class="msd-option @(SelectedValues.Contains(o) ? "msd-option-checked" : "")">
+                        <input type="checkbox"
+                               class="form-check-input me-2"
+                               checked="@SelectedValues.Contains(o)"
+                               @onchange="() => Toggle(o)" />
+                        <span class="small text-truncate" title="@o">@o</span>
+                    </label>
+                }
+                @if (!FilteredOptions.Any())
+                {
+                    <div class="p-2 text-muted small fst-italic">No matches</div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyList<string> AvailableOptions { get; set; } = [];
+    [Parameter, EditorRequired] public HashSet<string> SelectedValues { get; set; } = [];
+    [Parameter] public EventCallback<HashSet<string>> SelectedValuesChanged { get; set; }
+
+    private bool _isOpen;
+    private string _search = "";
+    private ElementReference _container;
+    private ElementReference _searchInput;
+    private DotNetObjectReference<MultiSelectFilterDropdown>? _selfRef;
+
+    private IEnumerable<string> FilteredOptions => string.IsNullOrEmpty(_search)
+        ? AvailableOptions
+        : AvailableOptions.Where(o => o.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    private async Task ToggleOpen()
+    {
+        _isOpen = !_isOpen;
+        if (_isOpen)
+        {
+            _selfRef ??= DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("dropdownInterop.addClickOutsideListener", _container, _selfRef);
+            // Focus the search box after the DOM renders
+            await Task.Yield();
+            try { await JS.InvokeVoidAsync("eval", "setTimeout(() => {}, 0)"); } catch { }
+        }
+        else
+        {
+            await CloseAndCleanup();
+        }
+    }
+
+    [JSInvokable]
+    public async Task Close()
+    {
+        if (_isOpen)
+        {
+            await CloseAndCleanup();
+            StateHasChanged();
+        }
+    }
+
+    private async Task CloseAndCleanup()
+    {
+        _isOpen = false;
+        _search = "";
+        try { await JS.InvokeVoidAsync("dropdownInterop.removeClickOutsideListener", _container); } catch { }
+    }
+
+    private async Task Toggle(string value)
+    {
+        var updated = new HashSet<string>(SelectedValues, StringComparer.OrdinalIgnoreCase);
+        if (!updated.Add(value)) updated.Remove(value);
+        await SelectedValuesChanged.InvokeAsync(updated);
+    }
+
+    private async Task SelectAll()
+    {
+        // When searching, merge visible options into existing selection; otherwise select all available
+        HashSet<string> updated;
+        if (!string.IsNullOrEmpty(_search))
+        {
+            updated = new HashSet<string>(SelectedValues, StringComparer.OrdinalIgnoreCase);
+            foreach (var v in FilteredOptions) updated.Add(v);
+        }
+        else
+        {
+            updated = new HashSet<string>(AvailableOptions, StringComparer.OrdinalIgnoreCase);
+        }
+        await SelectedValuesChanged.InvokeAsync(updated);
+    }
+
+    private async Task ClearSelection()
+    {
+        await SelectedValuesChanged.InvokeAsync(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_selfRef is not null)
+        {
+            try { await JS.InvokeVoidAsync("dropdownInterop.removeClickOutsideListener", _container); } catch { }
+            _selfRef.Dispose();
+            _selfRef = null;
+        }
+    }
+}

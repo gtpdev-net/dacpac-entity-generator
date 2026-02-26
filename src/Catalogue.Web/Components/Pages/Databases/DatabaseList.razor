@@ -2,8 +2,9 @@
 @rendermode InteractiveServer
 @inject ICatalogueRepository Repository
 @inject NotificationService Notify
+@inject IConfiguration Configuration
 
-<PageTitle>Databases &mdash; Source Catalogue</PageTitle>
+<PageTitle>Databases &mdash; @Configuration["AppTitle"] Migration</PageTitle>
 
 <BreadcrumbNav Items="@_breadcrumbs" />
 

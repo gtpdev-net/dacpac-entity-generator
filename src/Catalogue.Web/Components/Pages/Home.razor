@@ -1,8 +1,9 @@
 ﻿@page "/"
 @rendermode InteractiveServer
 @inject ICatalogueRepository Repository
+@inject IConfiguration Configuration
 
-<PageTitle>Dashboard &mdash; Source Catalogue</PageTitle>
+<PageTitle>Dashboard &mdash; @Configuration["AppTitle"] Migration</PageTitle>
 
 <h1 class="mb-4">Dashboard</h1>
 

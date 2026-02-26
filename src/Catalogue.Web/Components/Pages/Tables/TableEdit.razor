@@ -4,8 +4,9 @@
 @inject ICatalogueRepository Repository
 @inject NavigationManager Nav
 @inject NotificationService Notify
+@inject IConfiguration Configuration
 
-<PageTitle>@(_isNew ? "New Table" : "Edit Table") &mdash; Source Catalogue</PageTitle>
+<PageTitle>@(_isNew ? "New Table" : "Edit Table") &mdash; @Configuration["AppTitle"] Migration</PageTitle>
 
 <BreadcrumbNav Items="@_breadcrumbs" />
 
