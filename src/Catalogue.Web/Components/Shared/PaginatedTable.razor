@@ -1,0 +1,61 @@
+@typeparam TItem
+
+<div>
+    @if (PagedItems.Any())
+    {
+        <table class="table table-hover table-sm">
+            <thead class="table-light">
+                <tr>@HeaderTemplate</tr>
+            </thead>
+            <tbody>
+                @foreach (var item in PagedItems)
+                {
+                    <tr>@RowTemplate(item)</tr>
+                }
+            </tbody>
+        </table>
+
+        @if (TotalPages > 1)
+        {
+            <nav>
+                <ul class="pagination pagination-sm justify-content-end">
+                    <li class="page-item @(CurrentPage == 1 ? "disabled" : "")">
+                        <button class="page-link" @onclick="PrevPage">&laquo;</button>
+                    </li>
+                    @for (int p = 1; p <= TotalPages; p++)
+                    {
+                        var pg = p;
+                        <li class="page-item @(CurrentPage == pg ? "active" : "")">
+                            <button class="page-link" @onclick="() => GoToPage(pg)">@pg</button>
+                        </li>
+                    }
+                    <li class="page-item @(CurrentPage == TotalPages ? "disabled" : "")">
+                        <button class="page-link" @onclick="NextPage">&raquo;</button>
+                    </li>
+                </ul>
+            </nav>
+        }
+        <div class="text-muted small">Showing @PagedItems.Count of @Items.Count() items</div>
+    }
+    else
+    {
+        <div class="alert alert-info">No records found.</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IEnumerable<TItem> Items { get; set; } = [];
+    [Parameter, EditorRequired] public RenderFragment HeaderTemplate { get; set; } = null!;
+    [Parameter, EditorRequired] public RenderFragment<TItem> RowTemplate { get; set; } = null!;
+    [Parameter] public int PageSize { get; set; } = 25;
+
+    private int CurrentPage { get; set; } = 1;
+    private int TotalPages => (int)Math.Ceiling(Items.Count() / (double)PageSize);
+    private List<TItem> PagedItems => Items.Skip((CurrentPage - 1) * PageSize).Take(PageSize).ToList();
+
+    private void PrevPage() { if (CurrentPage > 1) CurrentPage--; }
+    private void NextPage() { if (CurrentPage < TotalPages) CurrentPage++; }
+    private void GoToPage(int p) { CurrentPage = p; }
+
+    protected override void OnParametersSet() => CurrentPage = 1;
+}

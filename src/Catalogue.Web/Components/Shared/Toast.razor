@@ -1,0 +1,47 @@
+@rendermode InteractiveServer
+@implements IDisposable
+@inject NotificationService Notifications
+
+@foreach (var toast in _messages)
+{
+    <div class="toast show align-items-center text-bg-@GetBsClass(toast.Level) border-0 mb-2"
+         role="alert" aria-live="assertive">
+        <div class="d-flex">
+            <div class="toast-body">@toast.Message</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto"
+                    @onclick="() => Remove(toast.Id)"></button>
+        </div>
+    </div>
+}
+
+@code {
+    private readonly List<ToastMessage> _messages = new();
+
+    protected override void OnInitialized()
+        => Notifications.OnShow += HandleShow;
+
+    private async void HandleShow(ToastMessage msg)
+    {
+        _messages.Add(msg);
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(5000);
+        _messages.Remove(msg);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void Remove(Guid id)
+    {
+        var m = _messages.FirstOrDefault(x => x.Id == id);
+        if (m is not null) { _messages.Remove(m); StateHasChanged(); }
+    }
+
+    private static string GetBsClass(ToastLevel level) => level switch
+    {
+        ToastLevel.Success => "success",
+        ToastLevel.Error   => "danger",
+        ToastLevel.Warning => "warning",
+        _                  => "info"
+    };
+
+    public void Dispose() => Notifications.OnShow -= HandleShow;
+}

@@ -1,0 +1,33 @@
+﻿@inherits LayoutComponentBase
+
+<div class="d-flex" style="min-height: 100vh;">
+    <!-- Sidebar -->
+    <nav class="d-flex flex-column flex-shrink-0 bg-dark text-white p-3" style="width:250px;">
+        <a href="/" class="d-flex align-items-center mb-3 text-white text-decoration-none">
+            <span class="fs-5 fw-bold">&#128218; Source Catalogue</span>
+        </a>
+        <hr class="border-secondary" />
+        <NavMenu />
+        <hr class="border-secondary mt-auto" />
+        <div class="small text-secondary px-2">
+        </div>
+    </nav>
+
+    <!-- Main content -->
+    <div class="flex-grow-1 d-flex flex-column">
+        <main class="container-fluid px-4 py-3 flex-grow-1">
+            @Body
+        </main>
+    </div>
+</div>
+
+<!-- Toast container -->
+<div class="position-fixed top-0 end-0 p-3" style="z-index:11">
+    <Toast />
+</div>
+
+<div id="blazor-error-ui">
+    An unhandled error has occurred.
+    <a href="" class="reload">Reload</a>
+    <a class="dismiss">&#x2715;</a>
+</div>

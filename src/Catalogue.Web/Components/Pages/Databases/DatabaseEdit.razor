@@ -1,0 +1,95 @@
+@page "/servers/{SourceId:int}/databases/new"
+@page "/servers/{SourceId:int}/databases/{DatabaseId:int}/edit"
+@rendermode InteractiveServer
+@inject ICatalogueRepository Repository
+@inject NavigationManager Nav
+@inject NotificationService Notify
+
+<PageTitle>@(_isNew ? "New Database" : "Edit Database") &mdash; Source Catalogue</PageTitle>
+
+<BreadcrumbNav Items="@_breadcrumbs" />
+
+<h2>@(_isNew ? "New Database" : "Edit Database")</h2>
+
+<EditForm Model="_model" OnValidSubmit="Save" class="row g-3" style="max-width:600px;">
+    <DataAnnotationsValidator />
+
+    <div class="col-12">
+        <label class="form-label">Database Name</label>
+        <InputText @bind-Value="_model.DatabaseName" class="form-control" />
+        <ValidationMessage For="() => _model.DatabaseName" />
+        @if (_nameExists)
+        {
+            <div class="text-danger small">A database with this name already exists on this server.</div>
+        }
+    </div>
+    <div class="col-12">
+        <label class="form-label">Description</label>
+        <InputTextArea @bind-Value="_model.Description" class="form-control" rows="3" />
+    </div>
+    <div class="col-12">
+        <div class="form-check">
+            <InputCheckbox @bind-Value="_model.IsActive" class="form-check-input" id="isActive" />
+            <label class="form-check-label" for="isActive">Active</label>
+        </div>
+    </div>
+    <div class="col-12">
+        <button type="submit" class="btn btn-primary me-2">Save</button>
+        <a href="/servers/@SourceId/databases" class="btn btn-secondary">Cancel</a>
+    </div>
+
+    @if (!_isNew)
+    {
+        <AuditFooter CreatedBy="@_model.CreatedBy" CreatedAt="_model.CreatedAt"
+                     ModifiedBy="@_model.ModifiedBy" ModifiedAt="_model.ModifiedAt" />
+    }
+</EditForm>
+
+@code {
+    [Parameter] public int SourceId { get; set; }
+    [Parameter] public int? DatabaseId { get; set; }
+
+    private SourceDatabase _model = new() { IsActive = true };
+    private bool _nameExists;
+    private bool _isNew => DatabaseId == null;
+    private IEnumerable<BreadcrumbItem> _breadcrumbs = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var source = await Repository.GetSourceByIdAsync(SourceId);
+        var serverName = source?.ServerName ?? SourceId.ToString();
+
+        _breadcrumbs =
+        [
+            new BreadcrumbItem("Servers", "/servers"),
+            new BreadcrumbItem(serverName, $"/servers/{SourceId}/databases"),
+            new BreadcrumbItem(_isNew ? "New" : "Edit", isActive: true)
+        ];
+
+        if (DatabaseId.HasValue)
+        {
+            var existing = await Repository.GetDatabaseByIdAsync(DatabaseId.Value);
+            if (existing is not null) _model = existing;
+        }
+        else
+        {
+            _model.SourceId = SourceId;
+        }
+    }
+
+    private async Task Save()
+    {
+        _nameExists = await Repository.DatabaseNameExistsAsync(
+            SourceId, _model.DatabaseName,
+            _isNew ? null : DatabaseId);
+        if (_nameExists) return;
+
+        if (_isNew)
+            await Repository.AddDatabaseAsync(_model);
+        else
+            await Repository.UpdateDatabaseAsync(_model);
+
+        Notify.Success("Database saved.");
+        Nav.NavigateTo($"/servers/{SourceId}/databases");
+    }
+}

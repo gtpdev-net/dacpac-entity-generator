@@ -1,0 +1,12 @@
+@if (Value)
+{
+    <span class="badge text-bg-success" title="Yes">&#10003;</span>
+}
+else
+{
+    <span class="badge text-bg-secondary" title="No">&#8213;</span>
+}
+
+@code {
+    [Parameter] public bool Value { get; set; }
+}

@@ -1,0 +1,91 @@
+@page "/servers"
+@rendermode InteractiveServer
+@inject ICatalogueRepository Repository
+@inject NavigationManager Nav
+@inject NotificationService Notify
+
+<PageTitle>Servers &mdash; Source Catalogue</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Servers</h1>
+    <a href="/servers/new" class="btn btn-primary">Add New Server</a>
+</div>
+
+<div class="mb-3">
+    <input class="form-control" style="max-width:320px" placeholder="Search by server name..."
+           @bind="_search" @bind:event="oninput" />
+</div>
+
+@if (_sources is null)
+{
+    <div class="spinner-border" role="status"></div>
+}
+else
+{
+    var filtered = _sources
+        .Where(s => string.IsNullOrWhiteSpace(_search) || s.ServerName.Contains(_search, StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    <PaginatedTable TItem="Source" Items="filtered" PageSize="25">
+        <HeaderTemplate>
+            <th>Server Name</th>
+            <th>Description</th>
+            <th># Databases</th>
+            <th>Active</th>
+            <th>Last Modified</th>
+            <th></th>
+        </HeaderTemplate>
+        <RowTemplate Context="src">
+            <td><a href="/servers/@src.SourceId/databases">@src.ServerName</a></td>
+            <td>@src.Description</td>
+            <td>@src.Databases.Count(d => d.IsActive)</td>
+            <td>
+                <input type="checkbox" checked="@src.IsActive"
+                       @onchange="() => ToggleActive(src)" />
+            </td>
+            <td>@(src.ModifiedAt?.ToString("dd MMM yyyy") ?? src.CreatedAt.ToString("dd MMM yyyy"))</td>
+            <td>
+                <a href="/servers/@src.SourceId/edit" class="btn btn-sm btn-outline-secondary me-1">Edit</a>
+                <button class="btn btn-sm btn-outline-danger"
+                        @onclick="() => Delete(src)">Delete</button>
+            </td>
+        </RowTemplate>
+    </PaginatedTable>
+}
+
+<ConfirmDialog @ref="_confirmDialog" Title="Delete Server"
+               ConfirmText="Delete" />
+
+@code {
+    private List<Source>? _sources;
+    private string _search = string.Empty;
+    private ConfirmDialog _confirmDialog = null!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var list = await Repository.GetSourcesAsync(includeInactive: true);
+        _sources = list.ToList();
+    }
+
+    private async Task ToggleActive(Source src)
+    {
+        src.IsActive = !src.IsActive;
+        await Repository.UpdateSourceAsync(src);
+        Notify.Success($"'{src.ServerName}' is now {(src.IsActive ? "active" : "inactive")}.");
+    }
+
+    private async Task Delete(Source src)
+    {
+        if (src.Databases.Any(d => d.IsActive))
+        {
+            Notify.Warning("Cannot delete a server with active databases. Deactivate it instead.");
+            return;
+        }
+        var ok = await _confirmDialog.ShowAsync(
+            $"Permanently delete server '{src.ServerName}'?");
+        if (!ok) return;
+        await Repository.DeleteSourceAsync(src.SourceId);
+        _sources!.Remove(src);
+        Notify.Success($"Server '{src.ServerName}' deleted.");
+    }
+}

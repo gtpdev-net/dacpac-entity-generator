@@ -1,0 +1,83 @@
+@page "/servers/new"
+@page "/servers/{SourceId:int}/edit"
+@rendermode InteractiveServer
+@inject ICatalogueRepository Repository
+@inject NavigationManager Nav
+@inject NotificationService Notify
+
+<PageTitle>@(SourceId == null ? "New Server" : "Edit Server") &mdash; Source Catalogue</PageTitle>
+
+<BreadcrumbNav Items="@_breadcrumbs" />
+
+<h2>@(SourceId == null ? "New Server" : "Edit Server")</h2>
+
+<EditForm Model="_model" OnValidSubmit="Save" class="row g-3" style="max-width:600px;">
+    <DataAnnotationsValidator />
+
+    <div class="col-12">
+        <label class="form-label">Server Name</label>
+        <InputText @bind-Value="_model.ServerName" class="form-control" />
+        <ValidationMessage For="() => _model.ServerName" />
+        @if (_nameExists)
+        {
+            <div class="text-danger small">Server name already exists.</div>
+        }
+    </div>
+    <div class="col-12">
+        <label class="form-label">Description</label>
+        <InputTextArea @bind-Value="_model.Description" class="form-control" rows="3" />
+    </div>
+    <div class="col-12">
+        <div class="form-check">
+            <InputCheckbox @bind-Value="_model.IsActive" class="form-check-input" id="isActive" />
+            <label class="form-check-label" for="isActive">Active</label>
+        </div>
+    </div>
+    <div class="col-12">
+        <button type="submit" class="btn btn-primary me-2">Save</button>
+        <a href="/servers" class="btn btn-secondary">Cancel</a>
+    </div>
+
+    @if (_model.SourceId > 0)
+    {
+        <AuditFooter CreatedBy="@_model.CreatedBy" CreatedAt="_model.CreatedAt"
+                     ModifiedBy="@_model.ModifiedBy" ModifiedAt="_model.ModifiedAt" />
+    }
+</EditForm>
+
+@code {
+    [Parameter] public int? SourceId { get; set; }
+
+    private Source _model = new() { IsActive = true };
+    private bool _nameExists;
+    private IEnumerable<BreadcrumbItem> _breadcrumbs = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _breadcrumbs =
+        [
+            new BreadcrumbItem("Servers", "/servers"),
+            new BreadcrumbItem(SourceId == null ? "New" : "Edit", isActive: true)
+        ];
+
+        if (SourceId.HasValue)
+        {
+            var existing = await Repository.GetSourceByIdAsync(SourceId.Value);
+            if (existing is not null) _model = existing;
+        }
+    }
+
+    private async Task Save()
+    {
+        _nameExists = await Repository.ServerNameExistsAsync(_model.ServerName, _model.SourceId == 0 ? null : _model.SourceId);
+        if (_nameExists) return;
+
+        if (_model.SourceId == 0)
+            await Repository.AddSourceAsync(_model);
+        else
+            await Repository.UpdateSourceAsync(_model);
+
+        Notify.Success("Server saved.");
+        Nav.NavigateTo("/servers");
+    }
+}

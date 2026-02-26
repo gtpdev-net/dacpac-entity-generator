@@ -1,0 +1,16 @@
+@if (Type == 'R')
+{
+    <span class="badge text-bg-primary" title="Relational">R</span>
+}
+else if (Type == 'D')
+{
+    <span class="badge text-bg-warning text-dark" title="Document">D</span>
+}
+else
+{
+    <span class="badge text-bg-secondary">@Type</span>
+}
+
+@code {
+    [Parameter] public char Type { get; set; } = 'R';
+}

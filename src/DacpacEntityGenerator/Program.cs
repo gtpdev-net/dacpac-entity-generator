@@ -1,16 +1,44 @@
-﻿using DacpacEntityGenerator.Models;
+﻿using Catalogue.Infrastructure.Import;
+using DacpacEntityGenerator.Models;
 using DacpacEntityGenerator.Services;
 using DacpacEntityGenerator.Utilities;
-using DocumentFormat.OpenXml.Bibliography;
-using DocumentFormat.OpenXml.Spreadsheet;
-using System.Reflection.Emit;
+using Microsoft.Extensions.Configuration;
 
 namespace DacpacEntityGenerator;
 
 class Program
 {
-    static void Main(string[] args)
+    static async Task Main(string[] args)
     {
+        // ── Parse Catalogue DB import flags ────────────────────────────────────
+        bool importToDb = args.Contains("--import-to-db");
+        bool dryRun     = args.Contains("--dry-run");
+
+        string? connectionString = null;
+        var connIdx = Array.IndexOf(args, "--connection-string");
+        if (connIdx >= 0 && connIdx < args.Length - 1)
+            connectionString = args[connIdx + 1];
+
+        if (importToDb && string.IsNullOrEmpty(connectionString))
+        {
+            // Fall back to appsettings.json
+            var config = new ConfigurationBuilder()
+                .AddJsonFile("appsettings.json", optional: true)
+                .Build();
+            connectionString = config.GetConnectionString("CatalogueDb");
+        }
+
+        var strategy = ImportConflictStrategy.FullSync;
+        var stratIdx = Array.IndexOf(args, "--conflict-strategy");
+        if (stratIdx >= 0 && stratIdx < args.Length - 1)
+        {
+            if (Enum.TryParse<ImportConflictStrategy>(args[stratIdx + 1], ignoreCase: true, out var parsed))
+                strategy = parsed;
+            else
+                ConsoleLogger.LogWarning($"Unknown conflict strategy '{args[stratIdx + 1]}', defaulting to FullSync.");
+        }
+        // ──────────────────────────────────────────────────────────────────────
+
         try
         {
             ConsoleLogger.LogInfo("=== DACPAC to Entity Class Generator ===");
@@ -436,6 +464,52 @@ class Program
 
             ConsoleLogger.LogInfo("");
             ConsoleLogger.LogProgress("Entity generation completed!");
+
+            // ── Optional: Persist Excel data to Catalogue DB ───────────────────────
+            if (importToDb)
+            {
+                ConsoleLogger.LogInfo("");
+                ConsoleLogger.LogInfo("=== Catalogue DB Import ===");
+
+                if (string.IsNullOrWhiteSpace(connectionString))
+                {
+                    ConsoleLogger.LogError(
+                        "--import-to-db requires a connection string. " +
+                        "Provide --connection-string <value> or set " +
+                        "ConnectionStrings:CatalogueDb in appsettings.json.");
+                }
+                else if (excelFilePath is not null)
+                {
+                    var runner = new CatalogueImportRunner(connectionString);
+                    var importResult = await runner.RunAsync(excelFilePath, strategy, dryRun);
+
+                    ConsoleLogger.LogInfo("");
+                    ConsoleLogger.LogInfo("=== Import Summary ===");
+                    ConsoleLogger.LogProgress($"Tables added:    {importResult.TablesAdded}");
+                    ConsoleLogger.LogProgress($"Columns added:   {importResult.ColumnsAdded}");
+                    ConsoleLogger.LogProgress($"Columns updated: {importResult.ColumnsUpdated}");
+                    ConsoleLogger.LogProgress($"Columns removed: {importResult.ColumnsRemoved}");
+                    ConsoleLogger.LogProgress($"Columns skipped: {importResult.ColumnsSkipped}");
+
+                    if (importResult.Errors.Count > 0)
+                    {
+                        ConsoleLogger.LogError($"Import errors: {importResult.Errors.Count}");
+                        foreach (var err in importResult.Errors)
+                            ConsoleLogger.LogError($"  - {err}");
+                    }
+                    else
+                    {
+                        ConsoleLogger.LogProgress(
+                            dryRun ? "Dry run complete — no changes written."
+                                   : "Import complete.");
+                    }
+                }
+                else
+                {
+                    ConsoleLogger.LogError("Cannot import to Catalogue DB: no Excel file was found.");
+                }
+            }
+            // ──────────────────────────────────────────────────────────────────────
         }
         catch (Exception ex)
         {

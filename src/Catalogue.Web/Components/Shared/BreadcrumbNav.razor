@@ -1,0 +1,19 @@
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        @foreach (var item in Items)
+        {
+            if (item.IsActive || string.IsNullOrEmpty(item.Href))
+            {
+                <li class="breadcrumb-item active" aria-current="page">@item.Label</li>
+            }
+            else
+            {
+                <li class="breadcrumb-item"><a href="@item.Href">@item.Label</a></li>
+            }
+        }
+    </ol>
+</nav>
+
+@code {
+    [Parameter, EditorRequired] public IEnumerable<BreadcrumbItem> Items { get; set; } = [];
+}

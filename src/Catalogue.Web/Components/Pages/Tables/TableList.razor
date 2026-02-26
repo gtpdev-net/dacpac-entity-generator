@@ -1,0 +1,104 @@
+@page "/servers/{SourceId:int}/databases/{DatabaseId:int}/tables"
+@rendermode InteractiveServer
+@inject ICatalogueRepository Repository
+@inject NotificationService Notify
+
+<PageTitle>Tables &mdash; Source Catalogue</PageTitle>
+
+<BreadcrumbNav Items="@_breadcrumbs" />
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Tables — @_databaseName</h1>
+    <a href="/servers/@SourceId/databases/@DatabaseId/tables/new" class="btn btn-primary">Add Table</a>
+</div>
+
+<!-- Filter chips -->
+<div class="mb-3 d-flex gap-2 flex-wrap">
+    <span class="badge @(_activeFilter == "inScope" ? "text-bg-primary" : "text-bg-light border") fs-6"
+          style="cursor:pointer" @onclick='() => SetFilter("inScope")'>Has In-Scope Columns</span>
+    <span class="badge @(_activeFilter == "forLoad" ? "text-bg-success" : "text-bg-light border") fs-6"
+          style="cursor:pointer" @onclick='() => SetFilter("forLoad")'>Has Load-Selected</span>
+    <span class="badge @(_activeFilter == "unreviewed" ? "text-bg-danger" : "text-bg-light border") fs-6"
+          style="cursor:pointer" @onclick='() => SetFilter("unreviewed")'>Has Unreviewed</span>
+    @if (!string.IsNullOrEmpty(_activeFilter))
+    {
+        <span class="badge text-bg-secondary fs-6" style="cursor:pointer" @onclick='() => _activeFilter = ""'>Clear</span>
+    }
+</div>
+
+@if (_tables is null)
+{
+    <div class="spinner-border" role="status"></div>
+}
+else
+{
+    var filtered = ApplyFilter(_tables);
+    <PaginatedTable TItem="SourceTableInfo" Items="filtered" PageSize="25">
+        <HeaderTemplate>
+            <th>Schema</th>
+            <th>Table</th>
+            <th>Rows</th>
+            <th>Total Cols</th>
+            <th>In-Scope R/D</th>
+            <th>For Load</th>
+            <th>Unreviewed</th>
+            <th>Active</th>
+            <th></th>
+        </HeaderTemplate>
+        <RowTemplate Context="t">
+            <td>@t.SchemaName</td>
+            <td><a href="/servers/@SourceId/databases/@DatabaseId/tables/@t.TableId/edit">@t.TableName</a></td>
+            <td>@(t.EstimatedRowCount?.ToString("N0") ?? "—")</td>
+            <td>@t.TotalColumnCount</td>
+            <td>
+                <span class="badge text-bg-primary me-1">@t.InScopeRelationalCount R</span>
+                <span class="badge text-bg-warning text-dark">@t.InScopeDocumentCount D</span>
+            </td>
+            <td><span class="badge text-bg-success">@t.SelectedForLoadCount</span></td>
+            <td><span class="badge text-bg-danger">@t.UnreviewedCount</span></td>
+            <td><FlagBadge Value="@t.IsActive" /></td>
+            <td>
+                <a href="/servers/@SourceId/databases/@DatabaseId/tables/@t.TableId/edit"
+                   class="btn btn-sm btn-outline-secondary">Edit</a>
+            </td>
+        </RowTemplate>
+    </PaginatedTable>
+}
+
+@code {
+    [Parameter] public int SourceId { get; set; }
+    [Parameter] public int DatabaseId { get; set; }
+
+    private List<SourceTableInfo>? _tables;
+    private string _databaseName = string.Empty;
+    private string _activeFilter = string.Empty;
+    private IEnumerable<BreadcrumbItem> _breadcrumbs = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var db = await Repository.GetDatabaseByIdAsync(DatabaseId);
+        _databaseName = db?.DatabaseName ?? DatabaseId.ToString();
+        var serverName = db?.Source.ServerName ?? SourceId.ToString();
+
+        _breadcrumbs =
+        [
+            new BreadcrumbItem("Servers", "/servers"),
+            new BreadcrumbItem(serverName, $"/servers/{SourceId}/databases"),
+            new BreadcrumbItem(_databaseName, isActive: true)
+        ];
+
+        var tables = await Repository.GetInScopeTablesAsync(databaseId: DatabaseId, includeInactive: true);
+        _tables = tables.ToList();
+    }
+
+    private IEnumerable<SourceTableInfo> ApplyFilter(List<SourceTableInfo> source)
+        => _activeFilter switch
+        {
+            "inScope"     => source.Where(t => t.InScopeRelationalCount + t.InScopeDocumentCount > 0),
+            "forLoad"     => source.Where(t => t.SelectedForLoadCount > 0),
+            "unreviewed"  => source.Where(t => t.UnreviewedCount > 0),
+            _             => source
+        };
+
+    private void SetFilter(string f) => _activeFilter = _activeFilter == f ? "" : f;
+}

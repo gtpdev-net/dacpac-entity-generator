@@ -1,0 +1,17 @@
+<small class="text-muted d-block mt-4 border-top pt-2">
+    @if (!string.IsNullOrEmpty(CreatedBy))
+    {
+        <span>Created by <strong>@CreatedBy</strong> on @CreatedAt.ToString("dd MMM yyyy HH:mm")</span>
+    }
+    @if (!string.IsNullOrEmpty(ModifiedBy) && ModifiedAt.HasValue)
+    {
+        <span class="ms-3">Last modified by <strong>@ModifiedBy</strong> on @ModifiedAt.Value.ToString("dd MMM yyyy HH:mm")</span>
+    }
+</small>
+
+@code {
+    [Parameter] public string? CreatedBy  { get; set; }
+    [Parameter] public DateTime CreatedAt { get; set; }
+    [Parameter] public string? ModifiedBy { get; set; }
+    [Parameter] public DateTime? ModifiedAt { get; set; }
+}

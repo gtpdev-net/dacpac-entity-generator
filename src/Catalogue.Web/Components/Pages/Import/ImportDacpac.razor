@@ -1,0 +1,128 @@
+@page "/import/dacpac"
+@rendermode InteractiveServer
+@inject DacpacParserService Parser
+@inject CatalogueImportService Importer
+@inject NotificationService Notify
+
+<PageTitle>Import DACPAC &mdash; Source Catalogue</PageTitle>
+
+<h1>Import DACPAC</h1>
+
+@if (_result is not null)
+{
+    <div class="alert alert-success">
+        <strong>Import complete.</strong>
+        Tables added: @_result.TablesAdded &middot;
+        Columns added: @_result.ColumnsAdded &middot;
+        Updated: @_result.ColumnsUpdated &middot;
+        Removed: @_result.ColumnsRemoved &middot;
+        Skipped: @_result.ColumnsSkipped
+        @foreach (var err in _result.Errors)
+        {
+            <div class="text-danger">@err</div>
+        }
+    </div>
+}
+
+<div class="row g-3" style="max-width:700px">
+    <div class="col-12">
+        <label class="form-label">DACPAC File</label>
+        <InputFile OnChange="LoadFile" accept=".dacpac" class="form-control" />
+    </div>
+    <div class="col-md-6">
+        <label class="form-label">Server Name</label>
+        <input class="form-control" @bind="_serverName" />
+    </div>
+    <div class="col-md-6">
+        <label class="form-label">Database Name</label>
+        <input class="form-control" @bind="_databaseName" />
+    </div>
+    <div class="col-md-6">
+        <label class="form-label">Conflict Strategy</label>
+        <select class="form-select" @bind="_strategy">
+            <option value="@ImportConflictStrategy.SkipExisting">Skip existing</option>
+            <option value="@ImportConflictStrategy.AddNewOnly">Add new only</option>
+            <option value="@ImportConflictStrategy.FullSync">Full sync (remove missing)</option>
+        </select>
+    </div>
+    <div class="col-md-6 d-flex align-items-end">
+        <div class="form-check mb-2">
+            <input type="checkbox" class="form-check-input" id="dryRun" @bind="_dryRun" />
+            <label class="form-check-label" for="dryRun">Dry-run (preview only)</label>
+        </div>
+    </div>
+    <div class="col-12">
+        <button class="btn btn-primary" @onclick="RunPreview" disabled="@(_fileStream is null)">
+            Preview
+        </button>
+    </div>
+</div>
+
+@if (_preview is not null)
+{
+    <h4 class="mt-4">Preview (@_preview.Count rows)</h4>
+    <div style="max-height:400px;overflow-y:auto;">
+        <table class="table table-sm table-bordered">
+            <thead class="table-light">
+                <tr><th>Schema</th><th>Table</th><th>Column</th><th>Type</th><th>Warning</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var r in _preview.Take(200))
+                {
+                    <tr class="@(string.IsNullOrEmpty(r.Warning) ? "" : "table-warning")">
+                        <td>@r.SchemaName</td><td>@r.TableName</td><td>@r.ColumnName</td>
+                        <td>@r.PersistenceType</td><td>@r.Warning</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    @if (!_dryRun)
+    {
+        <button class="btn btn-success mt-2" @onclick="Commit">Import @_preview.Count columns</button>
+    }
+}
+
+<ConfirmDialog @ref="_confirmDialog" Title="Confirm Import" ConfirmText="Import" />
+
+@code {
+    private string _serverName = string.Empty;
+    private string _databaseName = string.Empty;
+    private ImportConflictStrategy _strategy = ImportConflictStrategy.SkipExisting;
+    private bool _dryRun = true;
+    private MemoryStream? _fileStream;
+    private IReadOnlyList<ImportPreviewRow>? _preview;
+    private ImportResultDto? _result;
+    private ConfirmDialog _confirmDialog = null!;
+
+    private async Task LoadFile(InputFileChangeEventArgs e)
+    {
+        _fileStream = new MemoryStream();
+        await e.File.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024).CopyToAsync(_fileStream);
+        _fileStream.Position = 0;
+    }
+
+    private void RunPreview()
+    {
+        if (_fileStream is null) return;
+        _fileStream.Position = 0;
+        try
+        {
+            _preview = Parser.Parse(_fileStream, _serverName, _databaseName);
+        }
+        catch (Exception ex)
+        {
+            Notify.Error($"Failed to parse DACPAC: {ex.Message}");
+        }
+    }
+
+    private async Task Commit()
+    {
+        if (_preview is null) return;
+        var ok = await _confirmDialog.ShowAsync($"Import {_preview.Count} columns?");
+        if (!ok) return;
+        _result = await Importer.ImportAsync(_preview, _strategy, dryRun: false);
+        Notify.Success("Import complete.");
+        _preview = null;
+    }
+}

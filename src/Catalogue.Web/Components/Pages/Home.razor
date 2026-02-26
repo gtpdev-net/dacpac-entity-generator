@@ -1,0 +1,99 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@inject ICatalogueRepository Repository
+
+<PageTitle>Dashboard &mdash; Source Catalogue</PageTitle>
+
+<h1 class="mb-4">Dashboard</h1>
+
+@if (_summary is null)
+{
+    <div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div>
+}
+else
+{
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card text-bg-primary">
+                <div class="card-body">
+                    <div class="card-title h5">Servers</div>
+                    <div class="display-5">@_summary.TotalServers</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-bg-success">
+                <div class="card-body">
+                    <div class="card-title h5">Databases</div>
+                    <div class="display-5">@_summary.TotalDatabases</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-bg-info">
+                <div class="card-body">
+                    <div class="card-title h5">Tables</div>
+                    <div class="display-5">@_summary.TotalTables</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-bg-secondary">
+                <div class="card-body">
+                    <div class="card-title h5">Columns</div>
+                    <div class="display-5">@_summary.TotalColumns</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-primary">
+                <div class="card-body">
+                    <div class="card-title">In-Scope Relational (R)</div>
+                    <div class="fs-2 text-primary">@_summary.InScopeRelationalColumns</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-warning">
+                <div class="card-body">
+                    <div class="card-title">In-Scope Document (D)</div>
+                    <div class="fs-2 text-warning">@_summary.InScopeDocumentColumns</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-success">
+                <div class="card-body">
+                    <div class="card-title">Selected for Load</div>
+                    <div class="fs-2 text-success">@_summary.SelectedForLoadColumns</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-danger">
+                <div class="card-body">
+                    <div class="card-title">Unreviewed</div>
+                    <div class="fs-2 text-danger">@_summary.UnreviewedColumns</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (_summary.LastModifiedAt.HasValue)
+    {
+        <div class="alert alert-light border">
+            Last change: <strong>@_summary.LastModifiedBy</strong>
+            on <strong>@_summary.LastModifiedAt.Value.ToString("dd MMM yyyy HH:mm")</strong> UTC
+        </div>
+    }
+}
+
+@code {
+    private CatalogueSummaryDto? _summary;
+
+    protected override async Task OnInitializedAsync()
+        => _summary = await Repository.GetCatalogueSummaryAsync();
+}
