@@ -137,3 +137,10 @@ h1:focus {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
+/* ── Preset filter chips ─────────────────────────────────────────────────── */
+
+.preset-chip {
+    background-color: rgb(5, 39, 103);
+    color: #fff;
+}
