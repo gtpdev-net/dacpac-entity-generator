@@ -6,7 +6,7 @@ namespace DacpacEntityGenerator.Services;
 /// </summary>
 public class PathResolverService
 {
-    private const string ProjectFolderName = "_DacpacEntityGenerator";
+    private const string ProjectFolderName = "DacpacEntityGenerator";
 
     /// <summary>
     /// Returns the workspace root directory.  When the process is running from
