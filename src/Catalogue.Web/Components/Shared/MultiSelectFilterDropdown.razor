@@ -33,9 +33,9 @@
 
             <!-- Select all / clear -->
             <div class="px-2 py-1 border-bottom d-flex gap-2 msd-actions">
-                <a href="#" class="small" @onclick="SelectAll" @onclick:preventDefault="true">Select all</a>
+                <button type="button" class="btn btn-link btn-sm p-0 small" @onclick="SelectAll">Select all</button>
                 <span class="text-muted small">|</span>
-                <a href="#" class="small" @onclick="ClearSelection" @onclick:preventDefault="true">Clear</a>
+                <button type="button" class="btn btn-link btn-sm p-0 small" @onclick="ClearSelection">Clear</button>
                 @if (!string.IsNullOrEmpty(_search))
                 {
                     <span class="text-muted small ms-auto">@FilteredOptions.Count() of @AvailableOptions.Count</span>
