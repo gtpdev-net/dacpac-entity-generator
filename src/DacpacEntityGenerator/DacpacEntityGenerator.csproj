@@ -13,12 +13,9 @@
 
   <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.105.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.1" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Catalogue.Core\Catalogue.Core.csproj" />
-    <ProjectReference Include="..\Catalogue.Infrastructure\Catalogue.Infrastructure.csproj" />
     <ProjectReference Include="..\DacpacEntityGenerator.Core\DacpacEntityGenerator.Core.csproj" />
   </ItemGroup>
 
