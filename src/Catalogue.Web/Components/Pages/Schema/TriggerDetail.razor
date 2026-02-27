@@ -54,14 +54,9 @@ else
     {
         _loading = true;
 
-        var dbTask    = Repository.GetDatabaseByIdAsync(DatabaseId);
-        var tableTask = Repository.GetTableByIdAsync(TableId);
-        var triggers  = await Repository.GetTriggerDetailsAsync(TableId);
-
-        await Task.WhenAll(dbTask, tableTask);
-
-        var db    = await dbTask;
-        var table = await tableTask;
+        var db       = await Repository.GetDatabaseByIdAsync(DatabaseId);
+        var table    = await Repository.GetTableByIdAsync(TableId);
+        var triggers = await Repository.GetTriggerDetailsAsync(TableId);
 
         _databaseName = db?.DatabaseName ?? DatabaseId.ToString();
         _serverName   = db?.Source.ServerName ?? SourceId.ToString();

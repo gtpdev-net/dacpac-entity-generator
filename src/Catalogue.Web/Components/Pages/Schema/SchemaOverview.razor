@@ -234,17 +234,10 @@ else
             new BreadcrumbItem("Schema", isActive: true)
         ];
 
-        var tablesTask   = Repository.GetInScopeTablesAsync(DatabaseId, includeInactive: true);
-        var viewsTask    = Repository.GetViewsAsync(DatabaseId);
-        var procsTask    = Repository.GetStoredProceduresAsync(DatabaseId);
-        var functionsTask = Repository.GetFunctionsAsync(DatabaseId);
-
-        await Task.WhenAll(tablesTask, viewsTask, procsTask, functionsTask);
-
-        _tables    = (await tablesTask).ToList();
-        _views     = (await viewsTask).ToList();
-        _procs     = (await procsTask).ToList();
-        _functions = (await functionsTask).ToList();
+        _tables    = (await Repository.GetInScopeTablesAsync(DatabaseId, includeInactive: true)).ToList();
+        _views     = (await Repository.GetViewsAsync(DatabaseId)).ToList();
+        _procs     = (await Repository.GetStoredProceduresAsync(DatabaseId)).ToList();
+        _functions = (await Repository.GetFunctionsAsync(DatabaseId)).ToList();
 
         _loading = false;
     }
