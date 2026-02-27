@@ -1,5 +1,5 @@
-using DacpacEntityGenerator.Core.Abstractions;
-using DacpacEntityGenerator.Core.Models;
+using Catalogue.Core.Abstractions;
+using Dacpac.Management.Models;
 
 namespace DacpacEntityGenerator.Core.Services;
 

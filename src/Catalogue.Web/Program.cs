@@ -1,7 +1,7 @@
+using Catalogue.Core.Abstractions;
 using Catalogue.Infrastructure.Extensions;
 using Catalogue.Web.Components;
 using Catalogue.Web.Services;
-using DacpacEntityGenerator.Core.Abstractions;
 using DacpacEntityGenerator.Core.Extensions;
 using FluentValidation.AspNetCore;
 

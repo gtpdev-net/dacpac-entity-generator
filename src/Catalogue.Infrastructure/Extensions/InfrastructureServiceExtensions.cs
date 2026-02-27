@@ -2,6 +2,7 @@ using Catalogue.Core.Interfaces;
 using Catalogue.Infrastructure.Data;
 using Catalogue.Infrastructure.Import;
 using Catalogue.Infrastructure.Repositories;
+using Dacpac.Management.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,8 +24,10 @@ public static class InfrastructureServiceExtensions
 
         // Import services
         services.AddScoped<CatalogueImportService>();
-        services.AddSingleton<DacpacParserService>();
         services.AddSingleton<ExcelImportService>();
+
+        // DACPAC parsing & schema import
+        services.AddDacpacManagement();
 
         return services;
     }

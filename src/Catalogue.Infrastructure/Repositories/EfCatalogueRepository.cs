@@ -1,6 +1,7 @@
 using Catalogue.Core.DTOs;
 using Catalogue.Core.Interfaces;
 using Catalogue.Core.Models;
+using Catalogue.Core.Models.Schema;
 using Catalogue.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -304,4 +305,276 @@ public class EfCatalogueRepository : ICatalogueRepository
         => _db.SourceColumns.AnyAsync(c =>
             c.TableId == tableId && c.ColumnName == columnName
             && (excludeColumnId == null || c.ColumnId != excludeColumnId.Value));
+
+    // ── Views ────────────────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<SourceViewSummary>> GetViewsAsync(int databaseId)
+    {
+        return await _db.SourceViews
+            .Where(v => v.DatabaseId == databaseId && v.IsActive)
+            .OrderBy(v => v.SchemaName).ThenBy(v => v.ViewName)
+            .Select(v => new SourceViewSummary
+            {
+                SourceViewId = v.SourceViewId,
+                DatabaseId = v.DatabaseId,
+                SchemaName = v.SchemaName,
+                ViewName = v.ViewName,
+                ColumnCount = v.Columns.Count,
+                HasSqlBody = v.SqlBody != null,
+                IsActive = v.IsActive
+            }).ToListAsync();
+    }
+
+    public async Task<SourceViewDetail?> GetViewByIdAsync(int viewId)
+    {
+        var v = await _db.SourceViews
+            .Include(x => x.Columns.OrderBy(c => c.OrdinalPosition))
+            .FirstOrDefaultAsync(x => x.SourceViewId == viewId);
+        if (v is null) return null;
+        return new SourceViewDetail
+        {
+            SourceViewId = v.SourceViewId,
+            DatabaseId = v.DatabaseId,
+            SchemaName = v.SchemaName,
+            ViewName = v.ViewName,
+            SqlBody = v.SqlBody,
+            HasStandardAuditColumns = v.HasStandardAuditColumns,
+            IsActive = v.IsActive,
+            Columns = v.Columns.Select(c => new SourceViewColumnDto
+            {
+                SourceViewColumnId = c.SourceViewColumnId,
+                ColumnName = c.ColumnName,
+                SqlType = c.SqlType,
+                IsNullable = c.IsNullable,
+                MaxLength = c.MaxLength,
+                Precision = c.Precision,
+                Scale = c.Scale,
+                OrdinalPosition = c.OrdinalPosition
+            }).ToList()
+        };
+    }
+
+    // ── Stored Procedures ────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<SourceStoredProcedureSummary>> GetStoredProceduresAsync(int databaseId)
+    {
+        return await _db.SourceStoredProcedures
+            .Where(p => p.DatabaseId == databaseId && p.IsActive)
+            .OrderBy(p => p.SchemaName).ThenBy(p => p.ProcedureName)
+            .Select(p => new SourceStoredProcedureSummary
+            {
+                SourceStoredProcedureId = p.SourceStoredProcedureId,
+                DatabaseId = p.DatabaseId,
+                SchemaName = p.SchemaName,
+                ProcedureName = p.ProcedureName,
+                ParameterCount = p.Parameters.Count,
+                HasSqlBody = p.SqlBody != null,
+                IsActive = p.IsActive
+            }).ToListAsync();
+    }
+
+    public async Task<SourceStoredProcedureDetail?> GetStoredProcedureByIdAsync(int id)
+    {
+        var p = await _db.SourceStoredProcedures
+            .Include(x => x.Parameters)
+            .FirstOrDefaultAsync(x => x.SourceStoredProcedureId == id);
+        if (p is null) return null;
+        return new SourceStoredProcedureDetail
+        {
+            SourceStoredProcedureId = p.SourceStoredProcedureId,
+            DatabaseId = p.DatabaseId,
+            SchemaName = p.SchemaName,
+            ProcedureName = p.ProcedureName,
+            SqlBody = p.SqlBody,
+            IsActive = p.IsActive,
+            Parameters = p.Parameters.Select(x => new SourceStoredProcedureParameterDto
+            {
+                SourceStoredProcedureParameterId = x.SourceStoredProcedureParameterId,
+                Name = x.Name,
+                SqlType = x.SqlType,
+                IsOutput = x.IsOutput,
+                DefaultValue = x.DefaultValue
+            }).ToList()
+        };
+    }
+
+    // ── Functions ────────────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<SourceFunctionSummary>> GetFunctionsAsync(int databaseId)
+    {
+        return await _db.SourceFunctions
+            .Where(f => f.DatabaseId == databaseId && f.IsActive)
+            .OrderBy(f => f.SchemaName).ThenBy(f => f.FunctionName)
+            .Select(f => new SourceFunctionSummary
+            {
+                SourceFunctionId = f.SourceFunctionId,
+                DatabaseId = f.DatabaseId,
+                SchemaName = f.SchemaName,
+                FunctionName = f.FunctionName,
+                FunctionType = f.FunctionType,
+                ReturnType = f.ReturnType,
+                HasSqlBody = f.SqlBody != null,
+                IsActive = f.IsActive
+            }).ToListAsync();
+    }
+
+    public async Task<SourceFunctionDetail?> GetFunctionByIdAsync(int id)
+    {
+        var f = await _db.SourceFunctions.FirstOrDefaultAsync(x => x.SourceFunctionId == id);
+        if (f is null) return null;
+        return new SourceFunctionDetail
+        {
+            SourceFunctionId = f.SourceFunctionId,
+            DatabaseId = f.DatabaseId,
+            SchemaName = f.SchemaName,
+            FunctionName = f.FunctionName,
+            FunctionType = f.FunctionType,
+            ReturnType = f.ReturnType,
+            SqlBody = f.SqlBody,
+            IsActive = f.IsActive
+        };
+    }
+
+    // ── Triggers ─────────────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<SourceTriggerSummary>> GetTriggersAsync(int tableId)
+    {
+        return await _db.SourceTriggers
+            .Where(t => t.TableId == tableId && t.IsActive)
+            .OrderBy(t => t.TriggerName)
+            .Select(t => new SourceTriggerSummary
+            {
+                SourceTriggerId = t.SourceTriggerId,
+                TableId = t.TableId,
+                SchemaName = t.SchemaName,
+                TriggerName = t.TriggerName,
+                HasSqlBody = t.SqlBody != null,
+                IsActive = t.IsActive
+            }).ToListAsync();
+    }
+
+    public async Task<IReadOnlyList<SourceTriggerDetail>> GetTriggerDetailsAsync(int tableId)
+    {
+        return await _db.SourceTriggers
+            .Where(t => t.TableId == tableId && t.IsActive)
+            .OrderBy(t => t.TriggerName)
+            .Select(t => new SourceTriggerDetail
+            {
+                SourceTriggerId = t.SourceTriggerId,
+                TableId = t.TableId,
+                SchemaName = t.SchemaName,
+                TriggerName = t.TriggerName,
+                SqlBody = t.SqlBody,
+                IsActive = t.IsActive
+            }).ToListAsync();
+    }
+
+    // ── Indexes ──────────────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<SourceIndexSummary>> GetIndexesAsync(int tableId)
+    {
+        return await _db.SourceIndexes
+            .Include(i => i.Columns)
+            .Where(i => i.TableId == tableId && i.IsActive)
+            .OrderBy(i => i.Name)
+            .Select(i => new SourceIndexSummary
+            {
+                SourceIndexId = i.SourceIndexId,
+                TableId = i.TableId,
+                Name = i.Name,
+                IsUnique = i.IsUnique,
+                IsClustered = i.IsClustered,
+                IsPrimaryKeyIndex = i.IsPrimaryKeyIndex,
+                FilterDefinition = i.FilterDefinition,
+                Columns = i.Columns.OrderBy(c => c.SourceIndexColumnId).Select(c => c.ColumnName).ToList()
+            }).ToListAsync();
+    }
+
+    // ── Foreign Keys ─────────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<SourceForeignKeySummary>> GetForeignKeysAsync(int tableId)
+    {
+        return await _db.SourceForeignKeys
+            .Include(fk => fk.Columns.OrderBy(c => c.Ordinal))
+            .Where(fk => fk.TableId == tableId && fk.IsActive)
+            .OrderBy(fk => fk.Name)
+            .Select(fk => new SourceForeignKeySummary
+            {
+                SourceForeignKeyId = fk.SourceForeignKeyId,
+                TableId = fk.TableId,
+                Name = fk.Name,
+                ToSchema = fk.ToSchema,
+                ToTable = fk.ToTable,
+                OnDeleteCascade = fk.OnDeleteCascade,
+                Cardinality = fk.Cardinality,
+                Columns = fk.Columns.OrderBy(c => c.Ordinal).Select(c => new SourceForeignKeyColumnDto
+                {
+                    FromColumn = c.FromColumn,
+                    ToColumn = c.ToColumn,
+                    Ordinal = c.Ordinal
+                }).ToList()
+            }).ToListAsync();
+    }
+
+    // ── Schema import ────────────────────────────────────────────────────────
+
+    public async Task DeleteSchemaForDatabaseAsync(int databaseId)
+    {
+        // Delete all schema objects for the given database — views, procs, functions
+        var views = _db.SourceViews.Where(v => v.DatabaseId == databaseId);
+        _db.SourceViews.RemoveRange(views);
+
+        var procs = _db.SourceStoredProcedures.Where(p => p.DatabaseId == databaseId);
+        _db.SourceStoredProcedures.RemoveRange(procs);
+
+        var funcs = _db.SourceFunctions.Where(f => f.DatabaseId == databaseId);
+        _db.SourceFunctions.RemoveRange(funcs);
+
+        // Delete table-level schema objects (indexes, FKs, constraints, triggers)
+        var tableIds = await _db.SourceTables
+            .Where(t => t.DatabaseId == databaseId)
+            .Select(t => t.TableId)
+            .ToListAsync();
+
+        foreach (var tableId in tableIds)
+        {
+            _db.SourceIndexes.RemoveRange(_db.SourceIndexes.Where(i => i.TableId == tableId));
+            _db.SourceForeignKeys.RemoveRange(_db.SourceForeignKeys.Where(fk => fk.TableId == tableId));
+            _db.SourceCheckConstraints.RemoveRange(_db.SourceCheckConstraints.Where(c => c.TableId == tableId));
+            _db.SourceUniqueConstraints.RemoveRange(_db.SourceUniqueConstraints.Where(u => u.TableId == tableId));
+            _db.SourceTriggers.RemoveRange(_db.SourceTriggers.Where(t => t.TableId == tableId));
+        }
+
+        await _db.SaveChangesAsync();
+    }
+
+    public async Task BulkInsertViewsAsync(IEnumerable<SourceView> views)
+    {
+        _db.SourceViews.AddRange(views);
+        await _db.SaveChangesAsync();
+    }
+
+    public async Task BulkInsertStoredProceduresAsync(IEnumerable<SourceStoredProcedure> procedures)
+    {
+        _db.SourceStoredProcedures.AddRange(procedures);
+        await _db.SaveChangesAsync();
+    }
+
+    public async Task BulkInsertFunctionsAsync(IEnumerable<SourceFunction> functions)
+    {
+        _db.SourceFunctions.AddRange(functions);
+        await _db.SaveChangesAsync();
+    }
+
+    public async Task BulkInsertTableSchemaAsync(int tableId, IEnumerable<SourceIndex> indexes,
+        IEnumerable<SourceForeignKey> foreignKeys, IEnumerable<SourceCheckConstraint> checkConstraints,
+        IEnumerable<SourceUniqueConstraint> uniqueConstraints, IEnumerable<SourceTrigger> triggers)
+    {
+        _db.SourceIndexes.AddRange(indexes);
+        _db.SourceForeignKeys.AddRange(foreignKeys);
+        _db.SourceCheckConstraints.AddRange(checkConstraints);
+        _db.SourceUniqueConstraints.AddRange(uniqueConstraints);
+        _db.SourceTriggers.AddRange(triggers);
+        await _db.SaveChangesAsync();
+    }
 }

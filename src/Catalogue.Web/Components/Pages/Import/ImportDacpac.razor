@@ -1,26 +1,46 @@
 @page "/import/dacpac"
 @rendermode InteractiveServer
-@inject DacpacParserService Parser
-@inject CatalogueImportService Importer
+@using Dacpac.Management.Models
+@using Dacpac.Management.Services
+@inject DacpacSchemaImportService SchemaImporter
+@inject BlazorGenerationLogger Logger
 @inject NotificationService Notify
 @inject IConfiguration Configuration
+@implements IDisposable
 
 <PageTitle>Import DACPAC &mdash; @Configuration["AppTitle"] Migration</PageTitle>
 
 <h1>Import DACPAC</h1>
+<p class="text-muted">
+    Upload a .dacpac file to import the full schema — tables, columns (with type metadata),
+    indexes, foreign keys, constraints, views, stored procedures, functions, and triggers —
+    into the CatalogueDb.
+</p>
 
 @if (_result is not null)
 {
-    <div class="alert alert-success">
-        <strong>Import complete.</strong>
-        Tables added: @_result.TablesAdded &middot;
-        Columns added: @_result.ColumnsAdded &middot;
-        Updated: @_result.ColumnsUpdated &middot;
-        Removed: @_result.ColumnsRemoved &middot;
-        Skipped: @_result.ColumnsSkipped
+    <div class="alert @(_result.Success ? "alert-success" : "alert-danger") mb-4">
+        @if (_result.Success)
+        {
+            <strong>Import complete.</strong>
+        }
+        else
+        {
+            <strong>Import failed.</strong>
+        }
+        <div class="row g-2 mt-1">
+            <div class="col-auto"><span class="badge bg-secondary fs-6">Tables: @_result.TablesProcessed</span></div>
+            <div class="col-auto"><span class="badge bg-primary fs-6">Cols updated: @_result.ColumnsUpdated</span></div>
+            <div class="col-auto"><span class="badge bg-info text-dark fs-6">Cols created: @_result.ColumnsCreated</span></div>
+            <div class="col-auto"><span class="badge bg-success fs-6">Views: @_result.ViewsImported</span></div>
+            <div class="col-auto"><span class="badge bg-warning text-dark fs-6">Procs: @_result.StoredProceduresImported</span></div>
+            <div class="col-auto"><span class="badge bg-warning text-dark fs-6">Functions: @_result.FunctionsImported</span></div>
+            <div class="col-auto"><span class="badge bg-secondary fs-6">Indexes: @_result.IndexesImported</span></div>
+            <div class="col-auto"><span class="badge bg-secondary fs-6">Triggers: @_result.TriggersImported</span></div>
+        </div>
         @foreach (var err in _result.Errors)
         {
-            <div class="text-danger">@err</div>
+            <div class="text-danger mt-1">@err</div>
         }
     </div>
 }
@@ -28,102 +48,126 @@
 <div class="row g-3" style="max-width:700px">
     <div class="col-12">
         <label class="form-label">DACPAC File</label>
-        <InputFile OnChange="LoadFile" accept=".dacpac" class="form-control" />
+        <InputFile OnChange="LoadFile" accept=".dacpac" class="form-control" disabled="@_running" />
     </div>
     <div class="col-md-6">
         <label class="form-label">Server Name</label>
-        <input class="form-control" @bind="_serverName" />
+        <input class="form-control" @bind="_serverName" placeholder="e.g. MYSERVER" disabled="@_running" />
     </div>
     <div class="col-md-6">
         <label class="form-label">Database Name</label>
-        <input class="form-control" @bind="_databaseName" />
-    </div>
-    <div class="col-md-6">
-        <label class="form-label">Conflict Strategy</label>
-        <select class="form-select" @bind="_strategy">
-            <option value="@ImportConflictStrategy.SkipExisting">Skip existing</option>
-            <option value="@ImportConflictStrategy.AddNewOnly">Add new only</option>
-            <option value="@ImportConflictStrategy.FullSync">Full sync (remove missing)</option>
-        </select>
-    </div>
-    <div class="col-md-6 d-flex align-items-end">
-        <div class="form-check mb-2">
-            <input type="checkbox" class="form-check-input" id="dryRun" @bind="_dryRun" />
-            <label class="form-check-label" for="dryRun">Dry-run (preview only)</label>
-        </div>
+        <input class="form-control" @bind="_databaseName" placeholder="e.g. MyDatabase" disabled="@_running" />
+        <div class="form-text">Leave blank to infer from file name.</div>
     </div>
     <div class="col-12">
-        <button class="btn btn-primary" @onclick="RunPreview" disabled="@(_fileStream is null)">
-            Preview
+        <button class="btn btn-primary" @onclick="RunImport" disabled="@(!CanImport)">
+            @if (_running)
+            {
+                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                <span>Importing&hellip;</span>
+            }
+            else
+            {
+                <span>&#8599; Import Schema</span>
+            }
         </button>
     </div>
 </div>
 
-@if (_preview is not null)
+@if (_logLines.Count > 0 || _running)
 {
-    <h4 class="mt-4">Preview (@_preview.Count rows)</h4>
-    <div style="max-height:400px;overflow-y:auto;">
-        <table class="table table-sm table-bordered">
-            <thead class="table-light">
-                <tr><th>Schema</th><th>Table</th><th>Column</th><th>Type</th><th>Warning</th></tr>
-            </thead>
-            <tbody>
-                @foreach (var r in _preview.Take(200))
+    <div class="card mt-4">
+        <div class="card-header fw-semibold d-flex justify-content-between">
+            <span>Progress</span>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="() => _logLines.Clear()">Clear</button>
+        </div>
+        <div class="card-body p-0">
+            <div style="font-family:monospace;font-size:.82rem;max-height:300px;overflow-y:auto;padding:.75rem;background:#000;color:#e8e8e8;">
+                @foreach (var (level, msg) in _logLines)
                 {
-                    <tr class="@(string.IsNullOrEmpty(r.Warning) ? "" : "table-warning")">
-                        <td>@r.SchemaName</td><td>@r.TableName</td><td>@r.ColumnName</td>
-                        <td>@r.PersistenceType</td><td>@r.Warning</td>
-                    </tr>
+                    <div class="@LogClass(level)">@msg</div>
                 }
-            </tbody>
-        </table>
+                @if (_running)
+                {
+                    <div class="text-muted fst-italic">Running&hellip;</div>
+                }
+            </div>
+        </div>
     </div>
-    @if (!_dryRun)
-    {
-        <button class="btn btn-success mt-2" @onclick="Commit">Import @_preview.Count columns</button>
-    }
 }
 
-<ConfirmDialog @ref="_confirmDialog" Title="Confirm Import" ConfirmText="Import" />
-
 @code {
-    private string _serverName = string.Empty;
+    private string _serverName   = string.Empty;
     private string _databaseName = string.Empty;
-    private ImportConflictStrategy _strategy = ImportConflictStrategy.SkipExisting;
-    private bool _dryRun = true;
     private MemoryStream? _fileStream;
-    private IReadOnlyList<ImportPreviewRow>? _preview;
-    private ImportResultDto? _result;
-    private ConfirmDialog _confirmDialog = null!;
+    private string? _fileName;
+    private bool _running;
+    private DacpacImportResult? _result;
+    private readonly List<(string Level, string Message)> _logLines = new();
+
+    private bool CanImport => _fileStream is not null && !_running && !string.IsNullOrWhiteSpace(_serverName);
+
+    protected override void OnInitialized() => Logger.OnLog += HandleLog;
 
     private async Task LoadFile(InputFileChangeEventArgs e)
     {
         _fileStream = new MemoryStream();
-        await e.File.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024).CopyToAsync(_fileStream);
+        await e.File.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024).CopyToAsync(_fileStream);
         _fileStream.Position = 0;
+        _fileName = e.File.Name;
+
+        // Pre-fill database name from file name if blank
+        if (string.IsNullOrWhiteSpace(_databaseName))
+            _databaseName = Path.GetFileNameWithoutExtension(e.File.Name);
     }
 
-    private void RunPreview()
+    private async Task RunImport()
     {
-        if (_fileStream is null) return;
-        _fileStream.Position = 0;
+        if (!CanImport || _fileStream is null) return;
+
+        _result = null;
+        _logLines.Clear();
+        _running = true;
+        StateHasChanged();
+
         try
         {
-            _preview = Parser.Parse(_fileStream, _serverName, _databaseName);
+            _fileStream.Position = 0;
+            _result = await Task.Run(() =>
+                SchemaImporter.ImportSingleDacpacAsync(_fileStream, _serverName.Trim(), _databaseName.Trim()));
+
+            if (_result.Success)
+                Notify.Success($"Schema imported for {_databaseName}.");
+            else
+                Notify.Error("Import finished with errors — see details above.");
         }
         catch (Exception ex)
         {
-            Notify.Error($"Failed to parse DACPAC: {ex.Message}");
+            Notify.Error($"Unexpected error: {ex.Message}");
+        }
+        finally
+        {
+            _running = false;
+            StateHasChanged();
         }
     }
 
-    private async Task Commit()
+    private void HandleLog(string level, string message)
     {
-        if (_preview is null) return;
-        var ok = await _confirmDialog.ShowAsync($"Import {_preview.Count} columns?");
-        if (!ok) return;
-        _result = await Importer.ImportAsync(_preview, _strategy, dryRun: false);
-        Notify.Success("Import complete.");
-        _preview = null;
+        InvokeAsync(() =>
+        {
+            _logLines.Add((level, message));
+            StateHasChanged();
+        });
     }
+
+    private static string LogClass(string level) => level switch
+    {
+        "error"    => "text-danger",
+        "warning"  => "text-warning",
+        "progress" => "text-info",
+        _          => "text-light"
+    };
+
+    public void Dispose() => Logger.OnLog -= HandleLog;
 }

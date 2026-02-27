@@ -1,8 +1,7 @@
 using ClosedXML.Excel;
-using DacpacEntityGenerator.Core.Abstractions;
+using Catalogue.Core.Abstractions;
 using DacpacEntityGenerator.Core.Models;
-using DacpacEntityGenerator.Core.Utilities;
-using DocumentFormat.OpenXml.Wordprocessing;
+using Dacpac.Management.Utilities;
 
 namespace DacpacEntityGenerator.Core.Services;
 

@@ -1,3 +1,5 @@
+using Catalogue.Core.Models.Schema;
+
 namespace Catalogue.Core.Models;
 
 public class SourceDatabase
@@ -14,4 +16,10 @@ public class SourceDatabase
 
     public Source Source { get; set; } = null!;
     public ICollection<SourceTable> Tables { get; set; } = new List<SourceTable>();
+
+    // ── Schema navigation properties ──────────────────────────────────────────
+    public ICollection<SourceView> Views { get; set; } = new List<SourceView>();
+    public ICollection<SourceStoredProcedure> StoredProcedures { get; set; } = new List<SourceStoredProcedure>();
+    public ICollection<SourceFunction> Functions { get; set; } = new List<SourceFunction>();
 }
+

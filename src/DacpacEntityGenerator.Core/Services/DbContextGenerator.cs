@@ -1,6 +1,6 @@
 using System.Text;
-using DacpacEntityGenerator.Core.Models;
-using DacpacEntityGenerator.Core.Utilities;
+using Dacpac.Management.Models;
+using Dacpac.Management.Utilities;
 
 namespace DacpacEntityGenerator.Core.Services;
 

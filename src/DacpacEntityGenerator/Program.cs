@@ -1,4 +1,6 @@
-﻿using DacpacEntityGenerator.Core.Services;
+﻿using Catalogue.Core.Abstractions;
+using Dacpac.Management.Services;
+using DacpacEntityGenerator.Core.Services;
 using DacpacEntityGenerator.Services;
 using DacpacEntityGenerator.Utilities;
 
@@ -39,8 +41,9 @@ class Program
         }
         catch (Exception ex)
         {
-            logger.LogError($"Fatal error: {ex.Message}");
-            logger.LogError($"Stack trace: {ex.StackTrace}");
+            var logger2 = new ConsoleGenerationLogger();
+            logger2.LogError($"Fatal error: {ex.Message}");
+            logger2.LogError($"Stack trace: {ex.StackTrace}");
             Environment.Exit(1);
         }
     }

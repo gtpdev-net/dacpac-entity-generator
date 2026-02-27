@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Catalogue.Core\Catalogue.Core.csproj" />
+    <ProjectReference Include="..\Dacpac.Management\Dacpac.Management.csproj" />
   </ItemGroup>
 
   <ItemGroup>

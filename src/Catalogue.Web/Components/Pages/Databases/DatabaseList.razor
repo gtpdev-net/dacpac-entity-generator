@@ -36,7 +36,9 @@ else
             <td>@db.InScopeColumnCount</td>
             <td>@db.SelectedForLoadCount</td>
             <td><FlagBadge Value="@db.IsActive" /></td>
-            <td>
+            <td class="text-nowrap">
+                <a href="/servers/@SourceId/databases/@db.DatabaseId/schema"
+                   class="btn btn-sm btn-outline-info me-1">Schema</a>
                 <a href="/servers/@SourceId/databases/@db.DatabaseId/edit"
                    class="btn btn-sm btn-outline-secondary">Edit</a>
             </td>

@@ -1,3 +1,5 @@
+using Catalogue.Core.Models.Schema;
+
 namespace Catalogue.Core.Models;
 
 public class SourceTable
@@ -16,4 +18,12 @@ public class SourceTable
 
     public SourceDatabase Database { get; set; } = null!;
     public ICollection<SourceColumn> Columns { get; set; } = new List<SourceColumn>();
+
+    // ── Schema navigation properties ──────────────────────────────────────────
+    public ICollection<SourceIndex> Indexes { get; set; } = new List<SourceIndex>();
+    public ICollection<SourceForeignKey> ForeignKeys { get; set; } = new List<SourceForeignKey>();
+    public ICollection<SourceCheckConstraint> CheckConstraints { get; set; } = new List<SourceCheckConstraint>();
+    public ICollection<SourceUniqueConstraint> UniqueConstraints { get; set; } = new List<SourceUniqueConstraint>();
+    public ICollection<SourceTrigger> Triggers { get; set; } = new List<SourceTrigger>();
 }
+

@@ -150,3 +150,33 @@ h1:focus {
     background-color: rgb(5, 39, 103);
     color: #fff;
 }
+
+/* ── SQL Code Block ──────────────────────────────────────────────────────── */
+
+.sql-code-block {
+    background-color: #1e1e1e;
+    color: #d4d4d4;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.sql-code-block code {
+    color: inherit;
+    background: transparent;
+    white-space: pre;
+    display: block;
+}
+
+/* Token colours */
+.sql-kw  { color: #569cd6; font-weight: bold; }   /* blue  — keywords */
+.sql-kw2 { color: #c586c0; font-weight: bold; }   /* purple — type keywords */
+.sql-cm  { color: #6a9955; font-style: italic; }   /* green  — comments */
+.sql-st  { color: #ce9178; }                        /* orange — strings */
+.sql-nm  { color: #b5cea8; }                        /* light green — numbers */
+.sql-id  { color: #9cdcfe; }                        /* light blue — bracketed idents */

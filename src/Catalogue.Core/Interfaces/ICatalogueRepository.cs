@@ -1,5 +1,6 @@
 using Catalogue.Core.DTOs;
 using Catalogue.Core.Models;
+using Catalogue.Core.Models.Schema;
 
 namespace Catalogue.Core.Interfaces;
 
@@ -55,4 +56,36 @@ public interface ICatalogueRepository
     Task<bool> DatabaseNameExistsAsync(int sourceId, string databaseName, int? excludeDatabaseId = null);
     Task<bool> TableNameExistsAsync(int databaseId, string schemaName, string tableName, int? excludeTableId = null);
     Task<bool> ColumnNameExistsAsync(int tableId, string columnName, int? excludeColumnId = null);
+
+    // --- Views ---
+    Task<IReadOnlyList<SourceViewSummary>> GetViewsAsync(int databaseId);
+    Task<SourceViewDetail?> GetViewByIdAsync(int viewId);
+
+    // --- Stored Procedures ---
+    Task<IReadOnlyList<SourceStoredProcedureSummary>> GetStoredProceduresAsync(int databaseId);
+    Task<SourceStoredProcedureDetail?> GetStoredProcedureByIdAsync(int id);
+
+    // --- Functions ---
+    Task<IReadOnlyList<SourceFunctionSummary>> GetFunctionsAsync(int databaseId);
+    Task<SourceFunctionDetail?> GetFunctionByIdAsync(int id);
+
+    // --- Triggers ---
+    Task<IReadOnlyList<SourceTriggerSummary>> GetTriggersAsync(int tableId);
+    Task<IReadOnlyList<SourceTriggerDetail>> GetTriggerDetailsAsync(int tableId);
+
+    // --- Indexes ---
+    Task<IReadOnlyList<SourceIndexSummary>> GetIndexesAsync(int tableId);
+
+    // --- Foreign Keys ---
+    Task<IReadOnlyList<SourceForeignKeySummary>> GetForeignKeysAsync(int tableId);
+
+    // --- Schema import (bulk operations) ---
+    Task DeleteSchemaForDatabaseAsync(int databaseId);
+    Task BulkInsertViewsAsync(IEnumerable<SourceView> views);
+    Task BulkInsertStoredProceduresAsync(IEnumerable<SourceStoredProcedure> procedures);
+    Task BulkInsertFunctionsAsync(IEnumerable<SourceFunction> functions);
+    Task BulkInsertTableSchemaAsync(int tableId, IEnumerable<SourceIndex> indexes,
+        IEnumerable<SourceForeignKey> foreignKeys, IEnumerable<SourceCheckConstraint> checkConstraints,
+        IEnumerable<SourceUniqueConstraint> uniqueConstraints, IEnumerable<SourceTrigger> triggers);
 }
+

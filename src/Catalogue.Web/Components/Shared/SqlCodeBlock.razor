@@ -1,0 +1,33 @@
+@inject IJSRuntime JS
+
+@if (!string.IsNullOrWhiteSpace(SqlBody))
+{
+    <div class="sql-code-block">
+        <code class="language-sql" id="@_elementId">@SqlBody</code>
+    </div>
+}
+else
+{
+    <div class="text-muted fst-italic">No SQL body available.</div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string? SqlBody { get; set; }
+
+    private string _elementId = $"sql-{Guid.NewGuid():N}";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !string.IsNullOrWhiteSpace(SqlBody))
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("sqlHighlight.highlightElement", _elementId);
+            }
+            catch
+            {
+                // JS interop may fail during prerendering — safe to ignore
+            }
+        }
+    }
+}

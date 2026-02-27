@@ -17,5 +17,22 @@ public class SourceColumn
     public DateTime? ModifiedAt { get; set; }
     public string? ModifiedBy { get; set; }
 
+    // ── Schema metadata (populated by DacpacSchemaImportService) ──────────────
+    public string? SqlType { get; set; }
+    public bool IsNullable { get; set; } = true;
+    public int? MaxLength { get; set; }
+    public bool IsIdentity { get; set; }
+    public bool IsPrimaryKey { get; set; }
+    public int? Precision { get; set; }
+    public int? Scale { get; set; }
+    public string? DefaultValue { get; set; }
+    public bool IsComputed { get; set; }
+    public bool IsComputedPersisted { get; set; }
+    public string? ComputedExpression { get; set; }
+    public bool IsRowVersion { get; set; }
+    public bool IsConcurrencyToken { get; set; }
+    public string? Collation { get; set; }
+    public string? Description { get; set; }
+
     public SourceTable Table { get; set; } = null!;
 }

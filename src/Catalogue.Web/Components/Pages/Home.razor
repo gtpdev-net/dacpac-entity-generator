@@ -92,6 +92,41 @@ else
             on <strong>@_summary.LastModifiedAt.Value.ToString("dd MMM yyyy HH:mm")</strong> UTC
         </div>
     }
+
+    <h2 class="h5 mb-3 mt-4">Schema Browser</h2>
+    <div class="row g-3 mb-4">
+        <div class="col-md-6">
+            <div class="card border-info h-100">
+                <div class="card-body">
+                    <h6 class="card-title">Browse Database Schema</h6>
+                    <p class="card-text text-muted small">
+                        Explore tables, views, stored procedures, functions, and triggers
+                        with full SQL bodies for each database.
+                    </p>
+                    <a href="/servers" class="btn btn-sm btn-outline-info">
+                        &#128269; Open Schema Browser
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card border-secondary h-100">
+                <div class="card-body">
+                    <h6 class="card-title">Import DACPAC Schema</h6>
+                    <p class="card-text text-muted small">
+                        Import one or more <code>.dacpac</code> files to populate
+                        full schema metadata including SQL bodies.
+                    </p>
+                    <a href="/import/dacpac-folder" class="btn btn-sm btn-outline-secondary me-2">
+                        &#128193; Import Folder
+                    </a>
+                    <a href="/import/dacpac" class="btn btn-sm btn-outline-secondary">
+                        &#128230; Import Single
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
 }
 
 @code {

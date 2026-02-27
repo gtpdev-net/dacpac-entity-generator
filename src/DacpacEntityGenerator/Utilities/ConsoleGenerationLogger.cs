@@ -1,4 +1,4 @@
-using DacpacEntityGenerator.Core.Abstractions;
+using Catalogue.Core.Abstractions;
 
 namespace DacpacEntityGenerator.Utilities;
 

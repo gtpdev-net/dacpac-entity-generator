@@ -1,8 +1,8 @@
 using System.Text;
 using System.Text.Json;
-using DacpacEntityGenerator.Core.Abstractions;
-using DacpacEntityGenerator.Core.Models;
-using DacpacEntityGenerator.Core.Utilities;
+using Catalogue.Core.Abstractions;
+using Dacpac.Management.Models;
+using Dacpac.Management.Utilities;
 
 namespace DacpacEntityGenerator.Core.Services;
 

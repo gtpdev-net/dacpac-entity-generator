@@ -2,9 +2,14 @@
 @rendermode InteractiveServer
 @using DacpacEntityGenerator.Core.Models
 @using DacpacEntityGenerator.Core.Services
-@using DacpacEntityGenerator.Core.Abstractions
+@using Catalogue.Core.Abstractions
+@using Dacpac.Management.Models
+@using Dacpac.Management.Services
 @inject BlazorGenerationLogger Logger
 @inject GenerationOrchestrator Orchestrator
+@inject CatalogueGenerationOrchestrator DbOrchestrator
+@inject CatalogueDbSchemaDataSource DataSource
+@inject ICatalogueRepository Repo
 @inject IConfiguration Configuration
 @implements IDisposable
 
@@ -12,56 +17,136 @@
 
 <h1>EF Entity Generation</h1>
 <p class="text-muted">
-    Enter the full paths for your input files and output locations, then click Generate.
+    Generate EF Core entity classes from CatalogueDb (Database-sourced) or from Excel + DACPAC files (File-sourced).
 </p>
 
-@* ── Input Files ──────────────────────────────────────────────────────── *@
-<div class="card mb-3">
-    <div class="card-header fw-semibold">Input Files</div>
-    <div class="card-body row g-3" style="max-width:900px">
-        <div class="col-12">
-            <label class="form-label">Excel Mapping File</label>
-            <input type="text" class="form-control font-monospace"
-                   placeholder="/full/path/to/mapping.xlsx"
-                   @bind="_excelFilePath" @bind:event="oninput"
-                   disabled="@_running" />
-            <div class="form-text">Full path to the .xlsx mapping file.</div>
-        </div>
-        <div class="col-12">
-            <label class="form-label">DACPAC Files Folder</label>
-            <input type="text" class="form-control font-monospace"
-                   placeholder="/full/path/to/dacpacs/"
-                   @bind="_dacpacFolderPath" @bind:event="oninput"
-                   disabled="@_running" />
-            <div class="form-text">Full path to the folder containing .dacpac files.</div>
+@* ── Mode tabs ────────────────────────────────────────────────────────────────── *@
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+        <button class="nav-link @(_mode == GenMode.DatabaseSourced ? "active" : "")"
+                @onclick="() => SetMode(GenMode.DatabaseSourced)"
+                disabled="@_running">
+            &#128209;&nbsp;Database-sourced
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link @(_mode == GenMode.FileSourced ? "active" : "")"
+                @onclick="() => SetMode(GenMode.FileSourced)"
+                disabled="@_running">
+            &#128196;&nbsp;File-sourced (Excel + DACPAC)
+        </button>
+    </li>
+</ul>
+
+@if (_mode == GenMode.DatabaseSourced)
+{
+    @* ── Database-sourced: source selection ──────────────────────────────────── *@
+    <div class="card mb-3">
+        <div class="card-header fw-semibold">Source Database</div>
+        <div class="card-body row g-3" style="max-width:900px">
+            <div class="col-12">
+                <label class="form-label">Select Database</label>
+                @if (_databases.Count == 0)
+                {
+                    <div class="alert alert-warning mb-0">
+                        No databases found in CatalogueDb. Import data first via the Import pages.
+                    </div>
+                }
+                else
+                {
+                    <select class="form-select font-monospace"
+                            @bind="_selectedDatabaseId"
+                            disabled="@_running">
+                        <option value="0">-- select a database --</option>
+                        @foreach (var db in _databases)
+                        {
+                            <option value="@db.DatabaseId">
+                                [@db.ServerName].[@db.DatabaseName]&nbsp;&nbsp;(@db.SelectedForLoadCount selected for load)
+                            </option>
+                        }
+                    </select>
+                }
+                <div class="form-text">
+                    Columns with <em>IsSelectedForLoad = true</em> and
+                    <em>PersistenceType ≠ 'D'</em> are included in generation.
+                </div>
+            </div>
         </div>
     </div>
-</div>
 
-@* ── Output Locations ─────────────────────────────────────────────────── *@
-<div class="card mb-3">
-    <div class="card-header fw-semibold">Output Locations</div>
-    <div class="card-body row g-3" style="max-width:900px">
-        <div class="col-12">
-            <label class="form-label">Entity Output Folder</label>
-            <input type="text" class="form-control font-monospace"
-                   placeholder="/full/path/to/output/entities/"
-                   @bind="_entityOutputPath" @bind:event="oninput"
-                   disabled="@_running" />
-            <div class="form-text">Full path to the folder where generated entity .cs files will be written.</div>
-        </div>
-        <div class="col-12">
-            <label class="form-label">DbContext File</label>
-            <input type="text" class="form-control font-monospace"
-                   placeholder="/full/path/to/MyDbContext.cs"
-                   @bind="_dbContextFilePath" @bind:event="oninput"
-                   disabled="@_running" />
-            <div class="form-text">Full path to the .cs file where the DbContext will be written (will be overwritten).</div>
+    @* ── Database-sourced: output locations ────────────────────────────────── *@
+    <div class="card mb-3">
+        <div class="card-header fw-semibold">Output Locations</div>
+        <div class="card-body row g-3" style="max-width:900px">
+            <div class="col-12">
+                <label class="form-label">Entity Output Folder</label>
+                <input type="text" class="form-control font-monospace"
+                       placeholder="/full/path/to/output/entities/"
+                       @bind="_entityOutputPath" @bind:event="oninput"
+                       disabled="@_running" />
+                <div class="form-text">Full path to the folder where generated entity .cs files will be written.</div>
+            </div>
+            <div class="col-12">
+                <label class="form-label">DbContext File</label>
+                <input type="text" class="form-control font-monospace"
+                       placeholder="/full/path/to/MyDbContext.cs"
+                       @bind="_dbContextFilePath" @bind:event="oninput"
+                       disabled="@_running" />
+                <div class="form-text">Full path to the .cs file where the DbContext will be written (will be overwritten).</div>
+            </div>
         </div>
     </div>
-</div>
+}
+else
+{
+    @* ── File-sourced: input files ───────────────────────────────────────── *@
+    <div class="card mb-3">
+        <div class="card-header fw-semibold">Input Files</div>
+        <div class="card-body row g-3" style="max-width:900px">
+            <div class="col-12">
+                <label class="form-label">Excel Mapping File</label>
+                <input type="text" class="form-control font-monospace"
+                       placeholder="/full/path/to/mapping.xlsx"
+                       @bind="_excelFilePath" @bind:event="oninput"
+                       disabled="@_running" />
+                <div class="form-text">Full path to the .xlsx mapping file.</div>
+            </div>
+            <div class="col-12">
+                <label class="form-label">DACPAC Files Folder</label>
+                <input type="text" class="form-control font-monospace"
+                       placeholder="/full/path/to/dacpacs/"
+                       @bind="_dacpacFolderPath" @bind:event="oninput"
+                       disabled="@_running" />
+                <div class="form-text">Full path to the folder containing .dacpac files.</div>
+            </div>
+        </div>
+    </div>
 
-@* ── Validation errors ────────────────────────────────────────────────── *@
+    @* ── File-sourced: output locations ─────────────────────────────────── *@
+    <div class="card mb-3">
+        <div class="card-header fw-semibold">Output Locations</div>
+        <div class="card-body row g-3" style="max-width:900px">
+            <div class="col-12">
+                <label class="form-label">Entity Output Folder</label>
+                <input type="text" class="form-control font-monospace"
+                       placeholder="/full/path/to/output/entities/"
+                       @bind="_entityOutputPath" @bind:event="oninput"
+                       disabled="@_running" />
+                <div class="form-text">Full path to the folder where generated entity .cs files will be written.</div>
+            </div>
+            <div class="col-12">
+                <label class="form-label">DbContext File</label>
+                <input type="text" class="form-control font-monospace"
+                       placeholder="/full/path/to/MyDbContext.cs"
+                       @bind="_dbContextFilePath" @bind:event="oninput"
+                       disabled="@_running" />
+                <div class="form-text">Full path to the .cs file where the DbContext will be written (will be overwritten).</div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── Validation errors ────────────────────────────────────────────────────── *@
 @if (_validationErrors.Count > 0)
 {
     <div class="alert alert-warning mb-3">
@@ -163,48 +248,69 @@
 }
 
 @code {
-    // ── Path inputs ───────────────────────────────────────────────────────────
-    private string _excelFilePath    = string.Empty;
-    private string _dacpacFolderPath = string.Empty;
-    private string _entityOutputPath = string.Empty;
+    // ── Generation mode ───────────────────────────────────────────────────────
+    private enum GenMode { DatabaseSourced, FileSourced }
+    private GenMode _mode = GenMode.DatabaseSourced;
+
+    // ── Path inputs (shared + file-sourced) ───────────────────────────────────
+    private string _excelFilePath     = string.Empty;
+    private string _dacpacFolderPath  = string.Empty;
+    private string _entityOutputPath  = string.Empty;
     private string _dbContextFilePath = string.Empty;
+
+    // ── Database-sourced inputs ───────────────────────────────────────────────
+    private IReadOnlyList<SourceDatabaseInfo> _databases = Array.Empty<SourceDatabaseInfo>();
+    private int _selectedDatabaseId;
 
     // ── Run state ─────────────────────────────────────────────────────────────
     private bool _running;
     private CancellationTokenSource? _cts;
     private GenerationResult? _result;
-    private readonly List<LogEntry> _logLines = new();
+    private readonly List<LogEntry> _logLines        = new();
     private readonly List<string>   _validationErrors = new();
     private record LogEntry(string Level, string Message);
 
-    // ── Temp paths ────────────────────────────────────────────────────────────
+    // ── Temp directory ────────────────────────────────────────────────────────
     private string? _tempDir;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         Logger.OnLog += HandleLog;
+        _databases = await Repo.GetInScopeDatabasesAsync();
+    }
+
+    // ── Mode toggle ───────────────────────────────────────────────────────────
+    private void SetMode(GenMode mode)
+    {
+        if (!_running) _mode = mode;
     }
 
     // ── CanGenerate ───────────────────────────────────────────────────────────
-    private bool CanGenerate =>
-        !_running
-        && !string.IsNullOrWhiteSpace(_excelFilePath)
-        && !string.IsNullOrWhiteSpace(_dacpacFolderPath)
-        && !string.IsNullOrWhiteSpace(_entityOutputPath)
-        && !string.IsNullOrWhiteSpace(_dbContextFilePath);
+    private bool CanGenerate => !_running && (
+        _mode == GenMode.DatabaseSourced
+            ? _selectedDatabaseId > 0
+              && !string.IsNullOrWhiteSpace(_entityOutputPath)
+              && !string.IsNullOrWhiteSpace(_dbContextFilePath)
+            : !string.IsNullOrWhiteSpace(_excelFilePath)
+              && !string.IsNullOrWhiteSpace(_dacpacFolderPath)
+              && !string.IsNullOrWhiteSpace(_entityOutputPath)
+              && !string.IsNullOrWhiteSpace(_dbContextFilePath));
 
-    // ── Main generation flow ──────────────────────────────────────────────────
+    // ── Generation dispatch ───────────────────────────────────────────────────
     private async Task RunGeneration()
     {
         if (!CanGenerate) return;
 
-        // Validate paths before starting
+        // Validation
         _validationErrors.Clear();
-        if (!File.Exists(_excelFilePath.Trim()))
-            _validationErrors.Add($"Excel file not found: {_excelFilePath.Trim()}");
-        if (!Directory.Exists(_dacpacFolderPath.Trim()))
-            _validationErrors.Add($"DACPAC folder not found: {_dacpacFolderPath.Trim()}");
+        if (_mode == GenMode.FileSourced)
+        {
+            if (!File.Exists(_excelFilePath.Trim()))
+                _validationErrors.Add($"Excel file not found: {_excelFilePath.Trim()}");
+            if (!Directory.Exists(_dacpacFolderPath.Trim()))
+                _validationErrors.Add($"DACPAC folder not found: {_dacpacFolderPath.Trim()}");
+        }
         if (!Directory.Exists(_entityOutputPath.Trim()))
             _validationErrors.Add($"Entity output folder not found: {_entityOutputPath.Trim()}");
 
@@ -214,64 +320,18 @@
             return;
         }
 
-        _result = null;
+        _result  = null;
         _logLines.Clear();
         _running = true;
-        _cts = new CancellationTokenSource();
+        _cts     = new CancellationTokenSource();
         StateHasChanged();
 
         try
         {
-            var excelPath    = _excelFilePath.Trim();
-            var dacpacFolder = _dacpacFolderPath.Trim();
-            var entityOutput = _entityOutputPath.Trim();
-            var dbContextOut = _dbContextFilePath.Trim();
-
-            // 1. Stage inputs in a temp directory
-            _tempDir = Path.Combine(Path.GetTempPath(), "efgen_" + Guid.NewGuid().ToString("N"));
-            var tempInput  = Path.Combine(_tempDir, "_input");
-            var tempOutput = Path.Combine(_tempDir, "_output");
-            Directory.CreateDirectory(tempInput);
-            Directory.CreateDirectory(tempOutput);
-
-            // Copy Excel file
-            File.Copy(excelPath, Path.Combine(tempInput, Path.GetFileName(excelPath)), overwrite: true);
-
-            // Copy all DACPAC files into the 'dacpacs' subdirectory that DacpacExtractorService expects
-            var tempDacpacs = Path.Combine(tempInput, "dacpacs");
-            Directory.CreateDirectory(tempDacpacs);
-            foreach (var dacpac in Directory.EnumerateFiles(dacpacFolder, "*.dacpac", SearchOption.TopDirectoryOnly))
-                File.Copy(dacpac, Path.Combine(tempDacpacs, Path.GetFileName(dacpac)), overwrite: true);
-
-            // 2. Run orchestrator on background thread
-            GenerationResult result = await Task.Run(() => Orchestrator.Run(tempInput, tempOutput));
-            _result = result;
-
-            if (result.Success)
-            {
-                // 3. Copy generated output files to specified locations
-                foreach (var filePath in Directory.EnumerateFiles(tempOutput, "*", SearchOption.AllDirectories))
-                {
-                    var fileName = Path.GetFileName(filePath);
-
-                    if (fileName.EndsWith("DbContext.cs", StringComparison.OrdinalIgnoreCase))
-                    {
-                        // Write DbContext to the specified file path
-                        var dbContextDir = Path.GetDirectoryName(dbContextOut);
-                        if (!string.IsNullOrEmpty(dbContextDir))
-                            Directory.CreateDirectory(dbContextDir);
-                        File.Copy(filePath, dbContextOut, overwrite: true);
-                    }
-                    else
-                    {
-                        // Preserve relative structure under entity output folder
-                        var relativePath = Path.GetRelativePath(tempOutput, filePath);
-                        var destPath     = Path.Combine(entityOutput, relativePath);
-                        Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
-                        File.Copy(filePath, destPath, overwrite: true);
-                    }
-                }
-            }
+            if (_mode == GenMode.DatabaseSourced)
+                await RunDatabaseSourcedAsync();
+            else
+                await RunFileSourcedAsync();
         }
         catch (OperationCanceledException)
         {
@@ -286,6 +346,76 @@
             _running = false;
             CleanupTemp();
             StateHasChanged();
+        }
+    }
+
+    // ── Database-sourced pipeline ─────────────────────────────────────────────
+    private async Task RunDatabaseSourcedAsync()
+    {
+        var entityOutput = _entityOutputPath.Trim();
+        var dbContextOut = _dbContextFilePath.Trim();
+
+        _tempDir = Path.Combine(Path.GetTempPath(), "efgen_db_" + Guid.NewGuid().ToString("N"));
+        var tempOutput = Path.Combine(_tempDir, "_output");
+        Directory.CreateDirectory(tempOutput);
+
+        // Configure the CatalogueDb data source for the selected database
+        DataSource.DatabaseId = _selectedDatabaseId;
+
+        _result = await DbOrchestrator.RunAsync(DataSource, tempOutput);
+
+        if (_result.Success && (_result.EntitiesGenerated > 0 || _result.ViewsGenerated > 0))
+            CopyOutputFiles(tempOutput, entityOutput, dbContextOut);
+    }
+
+    // ── File-sourced pipeline ─────────────────────────────────────────────────
+    private async Task RunFileSourcedAsync()
+    {
+        var excelPath    = _excelFilePath.Trim();
+        var dacpacFolder = _dacpacFolderPath.Trim();
+        var entityOutput = _entityOutputPath.Trim();
+        var dbContextOut = _dbContextFilePath.Trim();
+
+        _tempDir = Path.Combine(Path.GetTempPath(), "efgen_" + Guid.NewGuid().ToString("N"));
+        var tempInput  = Path.Combine(_tempDir, "_input");
+        var tempOutput = Path.Combine(_tempDir, "_output");
+        Directory.CreateDirectory(tempInput);
+        Directory.CreateDirectory(tempOutput);
+
+        File.Copy(excelPath, Path.Combine(tempInput, Path.GetFileName(excelPath)), overwrite: true);
+
+        var tempDacpacs = Path.Combine(tempInput, "dacpacs");
+        Directory.CreateDirectory(tempDacpacs);
+        foreach (var dacpac in Directory.EnumerateFiles(dacpacFolder, "*.dacpac", SearchOption.TopDirectoryOnly))
+            File.Copy(dacpac, Path.Combine(tempDacpacs, Path.GetFileName(dacpac)), overwrite: true);
+
+        _result = await Task.Run(() => Orchestrator.Run(tempInput, tempOutput));
+
+        if (_result.Success)
+            CopyOutputFiles(tempOutput, entityOutput, dbContextOut);
+    }
+
+    // ── Shared output copy ────────────────────────────────────────────────────
+    private static void CopyOutputFiles(string tempOutput, string entityOutput, string dbContextOut)
+    {
+        foreach (var filePath in Directory.EnumerateFiles(tempOutput, "*", SearchOption.AllDirectories))
+        {
+            var fileName = Path.GetFileName(filePath);
+
+            if (fileName.EndsWith("DbContext.cs", StringComparison.OrdinalIgnoreCase))
+            {
+                var dbContextDir = Path.GetDirectoryName(dbContextOut);
+                if (!string.IsNullOrEmpty(dbContextDir))
+                    Directory.CreateDirectory(dbContextDir);
+                File.Copy(filePath, dbContextOut, overwrite: true);
+            }
+            else
+            {
+                var relativePath = Path.GetRelativePath(tempOutput, filePath);
+                var destPath     = Path.Combine(entityOutput, relativePath);
+                Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
+                File.Copy(filePath, destPath, overwrite: true);
+            }
         }
     }
 

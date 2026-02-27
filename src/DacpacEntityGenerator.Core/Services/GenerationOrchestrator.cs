@@ -1,7 +1,9 @@
 using System.Xml.Linq;
-using DacpacEntityGenerator.Core.Abstractions;
+using Catalogue.Core.Abstractions;
+using Dacpac.Management.Models;
+using Dacpac.Management.Services;
+using Dacpac.Management.Utilities;
 using DacpacEntityGenerator.Core.Models;
-using DacpacEntityGenerator.Core.Utilities;
 
 namespace DacpacEntityGenerator.Core.Services;
 

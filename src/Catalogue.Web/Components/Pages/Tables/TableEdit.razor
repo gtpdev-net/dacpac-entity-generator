@@ -117,6 +117,229 @@
     }
 </EditForm>
 
+<!-- ── Schema sections (read-only, sourced from DACPAC import) ───────────── -->
+@if (!_isNew && TableId.HasValue)
+{
+    <hr class="my-4" />
+    <h4>Schema Detail
+        <small class="text-muted fs-6 ms-2 fw-normal">from DACPAC import</small>
+    </h4>
+
+    <!-- Indexes -->
+    <div class="mb-3">
+        <button class="btn btn-sm btn-outline-secondary mb-2"
+                @onclick="ToggleIndexes">
+            @(_showIndexes ? "▲" : "▼") Indexes
+            @if (_indexes is not null)
+            {
+                <span class="badge text-bg-secondary ms-1">@_indexes.Count</span>
+            }
+        </button>
+        @if (_showIndexes)
+        {
+            @if (_indexes is null)
+            {
+                <div class="spinner-border spinner-border-sm ms-2"></div>
+            }
+            else if (_indexes.Count == 0)
+            {
+                <p class="text-muted small">No indexes found.</p>
+            }
+            else
+            {
+                <table class="table table-sm table-bordered align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Name</th>
+                            <th>PK</th>
+                            <th>Unique</th>
+                            <th>Clustered</th>
+                            <th>Columns</th>
+                            <th>Filter</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var ix in _indexes)
+                        {
+                            <tr>
+                                <td><code>@ix.Name</code></td>
+                                <td><FlagBadge Value="@ix.IsPrimaryKeyIndex" /></td>
+                                <td><FlagBadge Value="@ix.IsUnique" /></td>
+                                <td><FlagBadge Value="@ix.IsClustered" /></td>
+                                <td>@string.Join(", ", ix.Columns)</td>
+                                <td>@ix.FilterDefinition</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        }
+    </div>
+
+    <!-- Foreign Keys -->
+    <div class="mb-3">
+        <button class="btn btn-sm btn-outline-secondary mb-2"
+                @onclick="ToggleForeignKeys">
+            @(_showForeignKeys ? "▲" : "▼") Foreign Keys
+            @if (_foreignKeys is not null)
+            {
+                <span class="badge text-bg-secondary ms-1">@_foreignKeys.Count</span>
+            }
+        </button>
+        @if (_showForeignKeys)
+        {
+            @if (_foreignKeys is null)
+            {
+                <div class="spinner-border spinner-border-sm ms-2"></div>
+            }
+            else if (_foreignKeys.Count == 0)
+            {
+                <p class="text-muted small">No foreign keys found.</p>
+            }
+            else
+            {
+                <table class="table table-sm table-bordered align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Name</th>
+                            <th>To Table</th>
+                            <th>Cardinality</th>
+                            <th>On Delete</th>
+                            <th>Columns</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var fk in _foreignKeys)
+                        {
+                            <tr>
+                                <td><code>@fk.Name</code></td>
+                                <td><code>[@fk.ToSchema].[@fk.ToTable]</code></td>
+                                <td>@fk.Cardinality</td>
+                                <td><FlagBadge Value="@fk.OnDeleteCascade" /></td>
+                                <td>
+                                    @foreach (var col in fk.Columns)
+                                    {
+                                        <span class="d-block small">@col.FromColumn → @col.ToColumn</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        }
+    </div>
+
+    <!-- Check Constraints  (loaded inline via EF directly via SourceTable nav) -->
+    <div class="mb-3">
+        <button class="btn btn-sm btn-outline-secondary mb-2"
+                @onclick='() => _showCheckConstraints = !_showCheckConstraints' type="button">
+            @(_showCheckConstraints ? "▲" : "▼") Check Constraints
+            @if (_table.CheckConstraints is not null)
+            {
+                <span class="badge text-bg-secondary ms-1">@_table.CheckConstraints.Count</span>
+            }
+        </button>
+        @if (_showCheckConstraints)
+        {
+            @if (_table.CheckConstraints is null || _table.CheckConstraints.Count == 0)
+            {
+                <p class="text-muted small">No check constraints found.</p>
+            }
+            else
+            {
+                <table class="table table-sm table-bordered align-middle">
+                    <thead class="table-light"><tr><th>Name</th><th>Expression</th></tr></thead>
+                    <tbody>
+                        @foreach (var cc in _table.CheckConstraints)
+                        {
+                            <tr>
+                                <td><code>@cc.Name</code></td>
+                                <td><code>@cc.Expression</code></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        }
+    </div>
+
+    <!-- Unique Constraints -->
+    <div class="mb-3">
+        <button class="btn btn-sm btn-outline-secondary mb-2"
+                @onclick='() => _showUniqueConstraints = !_showUniqueConstraints' type="button">
+            @(_showUniqueConstraints ? "▲" : "▼") Unique Constraints
+            @if (_table.UniqueConstraints is not null)
+            {
+                <span class="badge text-bg-secondary ms-1">@_table.UniqueConstraints.Count</span>
+            }
+        </button>
+        @if (_showUniqueConstraints)
+        {
+            @if (_table.UniqueConstraints is null || _table.UniqueConstraints.Count == 0)
+            {
+                <p class="text-muted small">No unique constraints found.</p>
+            }
+            else
+            {
+                <table class="table table-sm table-bordered align-middle">
+                    <thead class="table-light">
+                        <tr><th>Name</th><th>Clustered</th><th>Columns</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var uc in _table.UniqueConstraints)
+                        {
+                            <tr>
+                                <td><code>@uc.Name</code></td>
+                                <td><FlagBadge Value="@uc.IsClustered" /></td>
+                                <td>@string.Join(", ", uc.Columns.Select(c => c.ColumnName))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        }
+    </div>
+
+    <!-- Triggers -->
+    <div class="mb-3">
+        <button class="btn btn-sm btn-outline-secondary mb-2"
+                @onclick="ToggleTriggers">
+            @(_showTriggers ? "▲" : "▼") Triggers
+            @if (_triggers is not null)
+            {
+                <span class="badge text-bg-secondary ms-1">@_triggers.Count</span>
+            }
+        </button>
+        @if (_showTriggers)
+        {
+            @if (_triggers is null)
+            {
+                <div class="spinner-border spinner-border-sm ms-2"></div>
+            }
+            else if (_triggers.Count == 0)
+            {
+                <p class="text-muted small">No triggers found.</p>
+            }
+            else
+            {
+                @foreach (var trig in _triggers)
+                {
+                    <div class="mb-3">
+                        <h6 class="d-flex align-items-center gap-2">
+                            <code>[@trig.SchemaName].[@trig.TriggerName]</code>
+                            <FlagBadge Value="@trig.IsActive" />
+                            <a href="/servers/@SourceId/databases/@DatabaseId/tables/@TableId/triggers/@trig.SourceTriggerId"
+                               class="btn btn-sm btn-outline-primary ms-auto">Full View</a>
+                        </h6>
+                        <SqlCodeBlock SqlBody="@trig.SqlBody" />
+                    </div>
+                }
+            }
+        }
+    </div>
+}
+
 @code {
     [Parameter] public int SourceId { get; set; }
     [Parameter] public int DatabaseId { get; set; }
@@ -128,6 +351,18 @@
     private string _pasteText = string.Empty;
     private string _newColumnName = string.Empty;
     private IEnumerable<BreadcrumbItem> _breadcrumbs = [];
+
+    // Schema section state
+    private bool _showIndexes;
+    private bool _showForeignKeys;
+    private bool _showCheckConstraints;
+    private bool _showUniqueConstraints;
+    private bool _showTriggers;
+
+    private List<SourceIndexSummary>? _indexes;
+    private List<SourceForeignKeySummary>? _foreignKeys;
+    private List<SourceTriggerDetail>? _triggers;
+
     protected override async Task OnParametersSetAsync()
     {
         var db = await Repository.GetDatabaseByIdAsync(DatabaseId);
@@ -187,6 +422,27 @@
 
     private void RemoveColumn(SourceColumn col)
         => _table.Columns.Remove(col);
+
+    private async Task ToggleIndexes()
+    {
+        _showIndexes = !_showIndexes;
+        if (_showIndexes && _indexes is null && TableId.HasValue)
+            _indexes = (await Repository.GetIndexesAsync(TableId.Value)).ToList();
+    }
+
+    private async Task ToggleForeignKeys()
+    {
+        _showForeignKeys = !_showForeignKeys;
+        if (_showForeignKeys && _foreignKeys is null && TableId.HasValue)
+            _foreignKeys = (await Repository.GetForeignKeysAsync(TableId.Value)).ToList();
+    }
+
+    private async Task ToggleTriggers()
+    {
+        _showTriggers = !_showTriggers;
+        if (_showTriggers && _triggers is null && TableId.HasValue)
+            _triggers = (await Repository.GetTriggerDetailsAsync(TableId.Value)).ToList();
+    }
 
     private async Task Save()
     {

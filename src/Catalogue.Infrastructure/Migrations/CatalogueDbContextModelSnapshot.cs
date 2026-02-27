@@ -22,6 +22,603 @@ namespace Catalogue.Infrastructure.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceCheckConstraint", b =>
+                {
+                    b.Property<int>("SourceCheckConstraintId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SourceCheckConstraintId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Expression")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<int>("TableId")
+                        .HasColumnType("int");
+
+                    b.HasKey("SourceCheckConstraintId");
+
+                    b.HasIndex("TableId");
+
+                    b.ToTable("SourceCheckConstraints", (string)null);
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceForeignKey", b =>
+                {
+                    b.Property<int>("SourceForeignKeyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SourceForeignKeyId"));
+
+                    b.Property<string>("Cardinality")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<bool>("OnDeleteCascade")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("OnUpdateCascade")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("TableId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ToSchema")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("ToTable")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.HasKey("SourceForeignKeyId");
+
+                    b.HasIndex("TableId");
+
+                    b.ToTable("SourceForeignKeys", (string)null);
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceForeignKeyColumn", b =>
+                {
+                    b.Property<int>("SourceForeignKeyColumnId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SourceForeignKeyColumnId"));
+
+                    b.Property<string>("FromColumn")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SourceForeignKeyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ToColumn")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.HasKey("SourceForeignKeyColumnId");
+
+                    b.HasIndex("SourceForeignKeyId");
+
+                    b.ToTable("SourceForeignKeyColumns", (string)null);
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceFunction", b =>
+                {
+                    b.Property<int>("SourceFunctionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SourceFunctionId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("DatabaseId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("FunctionName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("FunctionType")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ReturnType")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("SchemaName")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)")
+                        .HasDefaultValue("dbo");
+
+                    b.Property<string>("SqlBody")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("SourceFunctionId");
+
+                    b.HasIndex("DatabaseId", "SchemaName", "FunctionName")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_SourceFunctions_DbSchemaFunc");
+
+                    b.ToTable("SourceFunctions", (string)null);
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceIndex", b =>
+                {
+                    b.Property<int>("SourceIndexId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SourceIndexId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FilterDefinition")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsClustered")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPrimaryKeyIndex")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsUnique")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<int>("TableId")
+                        .HasColumnType("int");
+
+                    b.HasKey("SourceIndexId");
+
+                    b.HasIndex("TableId");
+
+                    b.ToTable("SourceIndexes", (string)null);
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceIndexColumn", b =>
+                {
+                    b.Property<int>("SourceIndexColumnId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SourceIndexColumnId"));
+
+                    b.Property<string>("ColumnName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<bool>("IsIncludedColumn")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("SortOrder")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(4)
+                        .HasColumnType("nvarchar(4)")
+                        .HasDefaultValue("ASC");
+
+                    b.Property<int>("SourceIndexId")
+                        .HasColumnType("int");
+
+                    b.HasKey("SourceIndexColumnId");
+
+                    b.HasIndex("SourceIndexId");
+
+                    b.ToTable("SourceIndexColumns", (string)null);
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceStoredProcedure", b =>
+                {
+                    b.Property<int>("SourceStoredProcedureId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SourceStoredProcedureId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("DatabaseId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ProcedureName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("SchemaName")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)")
+                        .HasDefaultValue("dbo");
+
+                    b.Property<string>("SqlBody")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("SourceStoredProcedureId");
+
+                    b.HasIndex("DatabaseId", "SchemaName", "ProcedureName")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_SourceStoredProcedures_DbSchemaProc");
+
+                    b.ToTable("SourceStoredProcedures", (string)null);
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceStoredProcedureParameter", b =>
+                {
+                    b.Property<int>("SourceStoredProcedureParameterId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SourceStoredProcedureParameterId"));
+
+                    b.Property<string>("DefaultValue")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("IsOutput")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<int>("SourceStoredProcedureId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SqlType")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.HasKey("SourceStoredProcedureParameterId");
+
+                    b.HasIndex("SourceStoredProcedureId");
+
+                    b.ToTable("SourceStoredProcedureParameters", (string)null);
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceTrigger", b =>
+                {
+                    b.Property<int>("SourceTriggerId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SourceTriggerId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SchemaName")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)")
+                        .HasDefaultValue("dbo");
+
+                    b.Property<string>("SqlBody")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("TableId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TriggerName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.HasKey("SourceTriggerId");
+
+                    b.HasIndex("TableId");
+
+                    b.ToTable("SourceTriggers", (string)null);
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceUniqueConstraint", b =>
+                {
+                    b.Property<int>("SourceUniqueConstraintId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SourceUniqueConstraintId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsClustered")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<int>("TableId")
+                        .HasColumnType("int");
+
+                    b.HasKey("SourceUniqueConstraintId");
+
+                    b.HasIndex("TableId");
+
+                    b.ToTable("SourceUniqueConstraints", (string)null);
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceUniqueConstraintColumn", b =>
+                {
+                    b.Property<int>("SourceUniqueConstraintColumnId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SourceUniqueConstraintColumnId"));
+
+                    b.Property<string>("ColumnName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<int>("SourceUniqueConstraintId")
+                        .HasColumnType("int");
+
+                    b.HasKey("SourceUniqueConstraintColumnId");
+
+                    b.HasIndex("SourceUniqueConstraintId");
+
+                    b.ToTable("SourceUniqueConstraintColumns", (string)null);
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceView", b =>
+                {
+                    b.Property<int>("SourceViewId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SourceViewId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("DatabaseId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("HasStandardAuditColumns")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SchemaName")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)")
+                        .HasDefaultValue("dbo");
+
+                    b.Property<string>("SqlBody")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ViewName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.HasKey("SourceViewId");
+
+                    b.HasIndex("DatabaseId", "SchemaName", "ViewName")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_SourceViews_DbSchemaView");
+
+                    b.ToTable("SourceViews", (string)null);
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceViewColumn", b =>
+                {
+                    b.Property<int>("SourceViewColumnId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SourceViewColumnId"));
+
+                    b.Property<string>("ColumnName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<bool>("IsNullable")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("MaxLength")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrdinalPosition")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("Precision")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("Scale")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SourceViewId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SqlType")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.HasKey("SourceViewColumnId");
+
+                    b.HasIndex("SourceViewId");
+
+                    b.ToTable("SourceViewColumns", (string)null);
+                });
+
             modelBuilder.Entity("Catalogue.Core.Models.Source", b =>
                 {
                     b.Property<int>("SourceId")
@@ -75,10 +672,18 @@ namespace Catalogue.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ColumnId"));
 
+                    b.Property<string>("Collation")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
                     b.Property<string>("ColumnName")
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("ComputedExpression")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -88,6 +693,14 @@ namespace Catalogue.Infrastructure.Migrations
                     b.Property<string>("CreatedBy")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("DefaultValue")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
@@ -96,11 +709,35 @@ namespace Catalogue.Infrastructure.Migrations
                     b.Property<bool>("IsAddedByApi")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsComputed")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsComputedPersisted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsConcurrencyToken")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsIdentity")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsInDaoAnalysis")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsNullable")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPrimaryKey")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsRowVersion")
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsSelectedForLoad")
                         .HasColumnType("bit");
+
+                    b.Property<int?>("MaxLength")
+                        .HasColumnType("int");
 
                     b.Property<DateTime?>("ModifiedAt")
                         .HasColumnType("datetime2");
@@ -115,10 +752,20 @@ namespace Catalogue.Infrastructure.Migrations
                         .HasColumnType("nvarchar(1)")
                         .HasDefaultValue("R");
 
+                    b.Property<int?>("Precision")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("Scale")
+                        .HasColumnType("int");
+
                     b.Property<int>("SortOrder")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
                         .HasDefaultValue(0);
+
+                    b.Property<string>("SqlType")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<int>("TableId")
                         .HasColumnType("int");
@@ -297,6 +944,149 @@ namespace Catalogue.Infrastructure.Migrations
                     b.ToView("vw_InScopeRelationalColumns", (string)null);
                 });
 
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceCheckConstraint", b =>
+                {
+                    b.HasOne("Catalogue.Core.Models.SourceTable", "Table")
+                        .WithMany("CheckConstraints")
+                        .HasForeignKey("TableId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Table");
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceForeignKey", b =>
+                {
+                    b.HasOne("Catalogue.Core.Models.SourceTable", "Table")
+                        .WithMany("ForeignKeys")
+                        .HasForeignKey("TableId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Table");
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceForeignKeyColumn", b =>
+                {
+                    b.HasOne("Catalogue.Core.Models.Schema.SourceForeignKey", "ForeignKey")
+                        .WithMany("Columns")
+                        .HasForeignKey("SourceForeignKeyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ForeignKey");
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceFunction", b =>
+                {
+                    b.HasOne("Catalogue.Core.Models.SourceDatabase", "Database")
+                        .WithMany("Functions")
+                        .HasForeignKey("DatabaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Database");
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceIndex", b =>
+                {
+                    b.HasOne("Catalogue.Core.Models.SourceTable", "Table")
+                        .WithMany("Indexes")
+                        .HasForeignKey("TableId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Table");
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceIndexColumn", b =>
+                {
+                    b.HasOne("Catalogue.Core.Models.Schema.SourceIndex", "Index")
+                        .WithMany("Columns")
+                        .HasForeignKey("SourceIndexId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Index");
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceStoredProcedure", b =>
+                {
+                    b.HasOne("Catalogue.Core.Models.SourceDatabase", "Database")
+                        .WithMany("StoredProcedures")
+                        .HasForeignKey("DatabaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Database");
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceStoredProcedureParameter", b =>
+                {
+                    b.HasOne("Catalogue.Core.Models.Schema.SourceStoredProcedure", "StoredProcedure")
+                        .WithMany("Parameters")
+                        .HasForeignKey("SourceStoredProcedureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("StoredProcedure");
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceTrigger", b =>
+                {
+                    b.HasOne("Catalogue.Core.Models.SourceTable", "Table")
+                        .WithMany("Triggers")
+                        .HasForeignKey("TableId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Table");
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceUniqueConstraint", b =>
+                {
+                    b.HasOne("Catalogue.Core.Models.SourceTable", "Table")
+                        .WithMany("UniqueConstraints")
+                        .HasForeignKey("TableId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Table");
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceUniqueConstraintColumn", b =>
+                {
+                    b.HasOne("Catalogue.Core.Models.Schema.SourceUniqueConstraint", "UniqueConstraint")
+                        .WithMany("Columns")
+                        .HasForeignKey("SourceUniqueConstraintId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("UniqueConstraint");
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceView", b =>
+                {
+                    b.HasOne("Catalogue.Core.Models.SourceDatabase", "Database")
+                        .WithMany("Views")
+                        .HasForeignKey("DatabaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Database");
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceViewColumn", b =>
+                {
+                    b.HasOne("Catalogue.Core.Models.Schema.SourceView", "View")
+                        .WithMany("Columns")
+                        .HasForeignKey("SourceViewId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("View");
+                });
+
             modelBuilder.Entity("Catalogue.Core.Models.SourceColumn", b =>
                 {
                     b.HasOne("Catalogue.Core.Models.SourceTable", "Table")
@@ -330,6 +1120,31 @@ namespace Catalogue.Infrastructure.Migrations
                     b.Navigation("Database");
                 });
 
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceForeignKey", b =>
+                {
+                    b.Navigation("Columns");
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceIndex", b =>
+                {
+                    b.Navigation("Columns");
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceStoredProcedure", b =>
+                {
+                    b.Navigation("Parameters");
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceUniqueConstraint", b =>
+                {
+                    b.Navigation("Columns");
+                });
+
+            modelBuilder.Entity("Catalogue.Core.Models.Schema.SourceView", b =>
+                {
+                    b.Navigation("Columns");
+                });
+
             modelBuilder.Entity("Catalogue.Core.Models.Source", b =>
                 {
                     b.Navigation("Databases");
@@ -337,12 +1152,28 @@ namespace Catalogue.Infrastructure.Migrations
 
             modelBuilder.Entity("Catalogue.Core.Models.SourceDatabase", b =>
                 {
+                    b.Navigation("Functions");
+
+                    b.Navigation("StoredProcedures");
+
                     b.Navigation("Tables");
+
+                    b.Navigation("Views");
                 });
 
             modelBuilder.Entity("Catalogue.Core.Models.SourceTable", b =>
                 {
+                    b.Navigation("CheckConstraints");
+
                     b.Navigation("Columns");
+
+                    b.Navigation("ForeignKeys");
+
+                    b.Navigation("Indexes");
+
+                    b.Navigation("Triggers");
+
+                    b.Navigation("UniqueConstraints");
                 });
 #pragma warning restore 612, 618
         }

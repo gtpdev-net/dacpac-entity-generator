@@ -1,0 +1,251 @@
+@page "/servers/{SourceId:int}/databases/{DatabaseId:int}/schema"
+@rendermode InteractiveServer
+@inject ICatalogueRepository Repository
+@inject IConfiguration Configuration
+
+<PageTitle>Schema &mdash; @Configuration["AppTitle"] Migration</PageTitle>
+
+<BreadcrumbNav Items="@_breadcrumbs" />
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Schema &mdash; @_databaseName</h1>
+</div>
+
+@if (_loading)
+{
+    <div class="spinner-border" role="status"><span class="visually-hidden">Loading…</span></div>
+}
+else
+{
+    <!-- Tab navigation -->
+    <ul class="nav nav-tabs mb-3" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link @(_activeTab == "tables"    ? "active" : "")" @onclick='() => _activeTab = "tables"'>
+                Tables <span class="badge text-bg-secondary ms-1">@_tables.Count</span>
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(_activeTab == "views"     ? "active" : "")" @onclick='() => _activeTab = "views"'>
+                Views <span class="badge text-bg-secondary ms-1">@_views.Count</span>
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(_activeTab == "procs"     ? "active" : "")" @onclick='() => _activeTab = "procs"'>
+                Stored Procedures <span class="badge text-bg-secondary ms-1">@_procs.Count</span>
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(_activeTab == "functions" ? "active" : "")" @onclick='() => _activeTab = "functions"'>
+                Functions <span class="badge text-bg-secondary ms-1">@_functions.Count</span>
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tables tab -->
+    @if (_activeTab == "tables")
+    {
+        @if (_tables.Count == 0)
+        {
+            <p class="text-muted">No tables found.</p>
+        }
+        else
+        {
+            <table class="table table-sm table-hover table-bordered align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Schema</th>
+                        <th>Table Name</th>
+                        <th class="text-end"># Columns</th>
+                        <th class="text-end"># For Load</th>
+                        <th>Active</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in _tables.OrderBy(t => t.SchemaName).ThenBy(t => t.TableName))
+                    {
+                        <tr>
+                            <td>@t.SchemaName</td>
+                            <td><strong>@t.TableName</strong></td>
+                            <td class="text-end">@t.TotalColumnCount</td>
+                            <td class="text-end">@t.SelectedForLoadCount</td>
+                            <td><FlagBadge Value="@t.IsActive" /></td>
+                            <td>
+                                <a href="/servers/@SourceId/databases/@DatabaseId/tables/@t.TableId/edit"
+                                   class="btn btn-sm btn-outline-secondary">Edit</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    }
+
+    <!-- Views tab -->
+    @if (_activeTab == "views")
+    {
+        @if (_views.Count == 0)
+        {
+            <p class="text-muted">No views found. Import a DACPAC to populate schema data.</p>
+        }
+        else
+        {
+            <table class="table table-sm table-hover table-bordered align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Schema</th>
+                        <th>View Name</th>
+                        <th class="text-end"># Columns</th>
+                        <th>SQL Body</th>
+                        <th>Active</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var v in _views.OrderBy(v => v.SchemaName).ThenBy(v => v.ViewName))
+                    {
+                        <tr>
+                            <td>@v.SchemaName</td>
+                            <td><strong>@v.ViewName</strong></td>
+                            <td class="text-end">@v.ColumnCount</td>
+                            <td><FlagBadge Value="@v.HasSqlBody" /></td>
+                            <td><FlagBadge Value="@v.IsActive" /></td>
+                            <td>
+                                <a href="/servers/@SourceId/databases/@DatabaseId/schema/views/@v.SourceViewId"
+                                   class="btn btn-sm btn-outline-primary">View</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    }
+
+    <!-- Stored Procedures tab -->
+    @if (_activeTab == "procs")
+    {
+        @if (_procs.Count == 0)
+        {
+            <p class="text-muted">No stored procedures found. Import a DACPAC to populate schema data.</p>
+        }
+        else
+        {
+            <table class="table table-sm table-hover table-bordered align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Schema</th>
+                        <th>Procedure Name</th>
+                        <th class="text-end"># Parameters</th>
+                        <th>SQL Body</th>
+                        <th>Active</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in _procs.OrderBy(p => p.SchemaName).ThenBy(p => p.ProcedureName))
+                    {
+                        <tr>
+                            <td>@p.SchemaName</td>
+                            <td><strong>@p.ProcedureName</strong></td>
+                            <td class="text-end">@p.ParameterCount</td>
+                            <td><FlagBadge Value="@p.HasSqlBody" /></td>
+                            <td><FlagBadge Value="@p.IsActive" /></td>
+                            <td>
+                                <a href="/servers/@SourceId/databases/@DatabaseId/schema/storedprocedures/@p.SourceStoredProcedureId"
+                                   class="btn btn-sm btn-outline-primary">View</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    }
+
+    <!-- Functions tab -->
+    @if (_activeTab == "functions")
+    {
+        @if (_functions.Count == 0)
+        {
+            <p class="text-muted">No functions found. Import a DACPAC to populate schema data.</p>
+        }
+        else
+        {
+            <table class="table table-sm table-hover table-bordered align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Schema</th>
+                        <th>Function Name</th>
+                        <th>Type</th>
+                        <th>Return Type</th>
+                        <th>SQL Body</th>
+                        <th>Active</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var f in _functions.OrderBy(f => f.SchemaName).ThenBy(f => f.FunctionName))
+                    {
+                        <tr>
+                            <td>@f.SchemaName</td>
+                            <td><strong>@f.FunctionName</strong></td>
+                            <td>@f.FunctionType</td>
+                            <td>@f.ReturnType</td>
+                            <td><FlagBadge Value="@f.HasSqlBody" /></td>
+                            <td><FlagBadge Value="@f.IsActive" /></td>
+                            <td>
+                                <a href="/servers/@SourceId/databases/@DatabaseId/schema/functions/@f.SourceFunctionId"
+                                   class="btn btn-sm btn-outline-primary">View</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    }
+}
+
+@code {
+    [Parameter] public int SourceId { get; set; }
+    [Parameter] public int DatabaseId { get; set; }
+
+    private bool _loading = true;
+    private string _activeTab = "tables";
+    private string _databaseName = string.Empty;
+    private string _serverName = string.Empty;
+
+    private List<SourceTableInfo> _tables = new();
+    private List<SourceViewSummary> _views = new();
+    private List<SourceStoredProcedureSummary> _procs = new();
+    private List<SourceFunctionSummary> _functions = new();
+    private IEnumerable<BreadcrumbItem> _breadcrumbs = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        var db = await Repository.GetDatabaseByIdAsync(DatabaseId);
+        _databaseName = db?.DatabaseName ?? DatabaseId.ToString();
+        _serverName = db?.Source.ServerName ?? SourceId.ToString();
+
+        _breadcrumbs =
+        [
+            new BreadcrumbItem("Servers", "/servers"),
+            new BreadcrumbItem(_serverName, $"/servers/{SourceId}/databases"),
+            new BreadcrumbItem(_databaseName, $"/servers/{SourceId}/databases/{DatabaseId}/tables"),
+            new BreadcrumbItem("Schema", isActive: true)
+        ];
+
+        var tablesTask   = Repository.GetInScopeTablesAsync(DatabaseId, includeInactive: true);
+        var viewsTask    = Repository.GetViewsAsync(DatabaseId);
+        var procsTask    = Repository.GetStoredProceduresAsync(DatabaseId);
+        var functionsTask = Repository.GetFunctionsAsync(DatabaseId);
+
+        await Task.WhenAll(tablesTask, viewsTask, procsTask, functionsTask);
+
+        _tables    = (await tablesTask).ToList();
+        _views     = (await viewsTask).ToList();
+        _procs     = (await procsTask).ToList();
+        _functions = (await functionsTask).ToList();
+
+        _loading = false;
+    }
+}
