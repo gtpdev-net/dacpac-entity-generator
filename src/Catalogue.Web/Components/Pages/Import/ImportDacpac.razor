@@ -96,24 +96,8 @@
 
 @if (_logLines.Count > 0 || _running)
 {
-    <div class="card mt-4">
-        <div class="card-header fw-semibold d-flex justify-content-between">
-            <span>Progress</span>
-            <button class="btn btn-sm btn-outline-secondary" @onclick="() => _logLines.Clear()">Clear</button>
-        </div>
-        <div class="card-body p-0">
-            <div style="font-family:monospace;font-size:.82rem;max-height:300px;overflow-y:auto;padding:.75rem;background:#000;color:#e8e8e8;">
-                @foreach (var (level, msg) in _logLines)
-                {
-                    <div class="@LogClass(level)">@msg</div>
-                }
-                @if (_running)
-                {
-                    <div class="text-muted fst-italic">Running&hellip;</div>
-                }
-            </div>
-        </div>
-    </div>
+    <ProgressLog Lines="_logLines" Running="_running"
+                 OnClear="() => _logLines.Clear()" MaxHeight="300px" />
 }
 
 @code {
@@ -124,7 +108,7 @@
     private string? _fileName;
     private bool _running;
     private DacpacImportResult? _result;
-    private readonly List<(string Level, string Message)> _logLines = new();
+    private readonly List<ProgressLog.LogEntry> _logLines = new();
 
     private bool CanImport =>
         _fileStream is not null &&
@@ -194,18 +178,10 @@
     {
         InvokeAsync(() =>
         {
-            _logLines.Add((level, message));
+            _logLines.Add(new ProgressLog.LogEntry(level, message));
             StateHasChanged();
         });
     }
-
-    private static string LogClass(string level) => level switch
-    {
-        "error"    => "text-danger",
-        "warning"  => "text-warning",
-        "progress" => "text-info",
-        _          => "text-light"
-    };
 
     public void Dispose() => Logger.OnLog -= HandleLog;
 }

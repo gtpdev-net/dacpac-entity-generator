@@ -216,25 +216,8 @@ else
 @* ── Progress Log ─────────────────────────────────────────────────────── *@
 @if (_logLines.Count > 0 || _running)
 {
-    <div class="card mb-4">
-        <div class="card-header fw-semibold d-flex justify-content-between">
-            <span>Progress Log</span>
-            <button class="btn btn-sm btn-outline-secondary" @onclick="ClearLog">Clear</button>
-        </div>
-        <div class="card-body p-0">
-            <div id="logContainer"
-                 style="font-family:monospace;font-size:.82rem;max-height:400px;overflow-y:auto;padding:.75rem;background:#000;color:#e8e8e8;">
-                @foreach (var (level, message) in _logLines)
-                {
-                    <div class="@LogLineClass(level)">@message</div>
-                }
-                @if (_running)
-                {
-                    <div class="text-muted fst-italic">Running&hellip;</div>
-                }
-            </div>
-        </div>
-    </div>
+    <ProgressLog Lines="_logLines" Running="_running" OnClear="ClearLog"
+                 Title="Progress Log" CardMarginClass="mb-4" />
 }
 
 @* ── Result ───────────────────────────────────────────────────────────── *@
@@ -301,9 +284,8 @@ else
     private bool _running;
     private CancellationTokenSource? _cts;
     private GenerationResult? _result;
-    private readonly List<LogEntry> _logLines        = new();
-    private readonly List<string>   _validationErrors = new();
-    private record LogEntry(string Level, string Message);
+    private readonly List<ProgressLog.LogEntry> _logLines        = new();
+    private readonly List<string>                _validationErrors = new();
 
     // ── Temp directory ────────────────────────────────────────────────────────
     private string? _tempDir;
@@ -376,11 +358,11 @@ else
         }
         catch (OperationCanceledException)
         {
-            _logLines.Add(new LogEntry("warning", "Generation cancelled."));
+            _logLines.Add(new ProgressLog.LogEntry("warning", "Generation cancelled."));
         }
         catch (Exception ex)
         {
-            _logLines.Add(new LogEntry("error", $"Unexpected error: {ex.Message}"));
+            _logLines.Add(new ProgressLog.LogEntry("error", $"Unexpected error: {ex.Message}"));
         }
         finally
         {
@@ -444,20 +426,12 @@ else
     {
         InvokeAsync(() =>
         {
-            _logLines.Add(new LogEntry(level, message));
+            _logLines.Add(new ProgressLog.LogEntry(level, message));
             StateHasChanged();
         });
     }
 
     // ── UI helpers ────────────────────────────────────────────────────────────
-    private static string LogLineClass(string level) => level switch
-    {
-        "error"    => "text-danger",
-        "warning"  => "text-warning",
-        "progress" => "text-info",
-        _          => "text-light",
-    };
-
     private void ClearLog() => _logLines.Clear();
 
     // ── Cleanup ───────────────────────────────────────────────────────────────

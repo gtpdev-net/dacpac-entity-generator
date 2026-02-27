@@ -51,8 +51,3 @@ export async function writeDbContextFile(content) {
     await writable.write(content);
     await writable.close();
 }
-
-export function scrollToBottom(elementId) {
-    const el = document.getElementById(elementId);
-    if (el) el.scrollTop = el.scrollHeight;
-}

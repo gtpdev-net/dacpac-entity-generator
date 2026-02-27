@@ -1,0 +1,76 @@
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<div class="card @CardMarginClass">
+    <div class="card-header fw-semibold d-flex justify-content-between">
+        <span>@Title</span>
+        <button class="btn btn-sm btn-outline-secondary" @onclick="OnClear">Clear</button>
+    </div>
+    <div class="card-body p-0">
+        <div id="@_elementId"
+             style="font-family:monospace;font-size:.82rem;max-height:@MaxHeight;overflow-y:auto;padding:.75rem;background:#000;color:#e8e8e8;">
+            @foreach (var entry in Lines)
+            {
+                <div class="@LineClass(entry.Level)">@entry.Message</div>
+            }
+            @if (Running)
+            {
+                <div class="text-muted fst-italic">Running&hellip;</div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    /// <summary>Log entries to display.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<LogEntry> Lines { get; set; } = [];
+
+    /// <summary>When true, shows the "Running…" indicator at the bottom.</summary>
+    [Parameter, EditorRequired] public bool Running { get; set; }
+
+    /// <summary>Called when the user clicks Clear.</summary>
+    [Parameter] public EventCallback OnClear { get; set; }
+
+    /// <summary>CSS max-height of the scrollable panel (default: 400px).</summary>
+    [Parameter] public string MaxHeight { get; set; } = "400px";
+
+    /// <summary>Header text (default: "Progress").</summary>
+    [Parameter] public string Title { get; set; } = "Progress";
+
+    /// <summary>Additional Bootstrap margin class on the outer card (default: "mt-4").</summary>
+    [Parameter] public string CardMarginClass { get; set; } = "mt-4";
+
+    // Stable unique ID for the scrollable div — survives re-renders.
+    private readonly string _elementId = $"progress-log-{Guid.NewGuid():N}";
+    private int _previousLineCount;
+
+    /// <summary>Log entry shared type used by consuming pages.</summary>
+    public record LogEntry(string Level, string Message);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            await JS.InvokeVoidAsync("progressLog.init", _elementId);
+
+        if (Lines.Count != _previousLineCount)
+        {
+            if (Lines.Count > _previousLineCount)
+                await JS.InvokeVoidAsync("progressLog.scrollToBottom", _elementId);
+            _previousLineCount = Lines.Count;
+        }
+    }
+
+    private static string LineClass(string level) => level switch
+    {
+        "error"    => "text-danger",
+        "warning"  => "text-warning",
+        "progress" => "text-info",
+        _          => "text-light",
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("progressLog.dispose", _elementId); }
+        catch { /* JS runtime may already be disposed on circuit teardown */ }
+    }
+}
