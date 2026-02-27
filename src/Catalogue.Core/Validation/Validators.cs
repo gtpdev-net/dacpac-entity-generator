@@ -1,4 +1,4 @@
-using Catalogue.Core.Models;
+using Catalogue.Core.Models.Entities;
 using FluentValidation;
 
 namespace Catalogue.Core.Validation;

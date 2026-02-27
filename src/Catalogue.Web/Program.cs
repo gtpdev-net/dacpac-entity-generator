@@ -2,7 +2,6 @@ using Catalogue.Core.Abstractions;
 using Catalogue.Infrastructure.Extensions;
 using Catalogue.Web.Components;
 using Catalogue.Web.Services;
-using DacpacEntityGenerator.Core.Extensions;
 using FluentValidation.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -21,7 +20,6 @@ builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddScoped<Catalogue.Web.Services.NotificationService>();
 
 // ── EF Generation services ────────────────────────────────────────────────────
-builder.Services.AddGenerationServices();
 builder.Services.AddScoped<BlazorGenerationLogger>();
 builder.Services.AddScoped<IGenerationLogger>(sp => sp.GetRequiredService<BlazorGenerationLogger>());
 

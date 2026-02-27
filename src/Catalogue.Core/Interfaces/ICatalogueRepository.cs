@@ -1,5 +1,5 @@
 using Catalogue.Core.DTOs;
-using Catalogue.Core.Models;
+using Catalogue.Core.Models.Entities;
 
 namespace Catalogue.Core.Interfaces;
 

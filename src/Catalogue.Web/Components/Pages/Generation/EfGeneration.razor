@@ -1,10 +1,9 @@
 @page "/generation/ef"
 @rendermode InteractiveServer
-@using DacpacEntityGenerator.Core.Models
-@using DacpacEntityGenerator.Core.Services
+@using Catalogue.Core.Models
+@using Catalogue.Infrastructure.Generation
 @using Catalogue.Core.Abstractions
-@using Dacpac.Management.Models
-@using Dacpac.Management.Services
+@using Catalogue.Infrastructure.Data
 @inject BlazorGenerationLogger Logger
 @inject GenerationOrchestrator Orchestrator
 @inject CatalogueGenerationOrchestrator DbOrchestrator

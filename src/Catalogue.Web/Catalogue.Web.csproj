@@ -2,8 +2,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Catalogue.Infrastructure\Catalogue.Infrastructure.csproj" />
-    <ProjectReference Include="..\Dacpac.Management\Dacpac.Management.csproj" />
-    <ProjectReference Include="..\DacpacEntityGenerator.Core\DacpacEntityGenerator.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

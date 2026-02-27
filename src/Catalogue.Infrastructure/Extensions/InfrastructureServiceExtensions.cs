@@ -1,8 +1,9 @@
 using Catalogue.Core.Interfaces;
+using Catalogue.Infrastructure.Dacpac;
 using Catalogue.Infrastructure.Data;
+using Catalogue.Infrastructure.Generation;
 using Catalogue.Infrastructure.Import;
 using Catalogue.Infrastructure.Repositories;
-using Dacpac.Management.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,8 +27,22 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<CatalogueImportService>();
         services.AddSingleton<ExcelImportService>();
 
-        // DACPAC parsing & schema import
-        services.AddDacpacManagement();
+        // DACPAC parsing services
+        services.AddTransient<DacpacExtractorService>();
+        services.AddTransient<ModelXmlParserService>();
+        services.AddTransient<PrimaryKeyEnricher>();
+        services.AddScoped<DacpacSchemaImportService>();
+        services.AddScoped<CatalogueDbSchemaDataSource>();
+
+        // EF entity generation services
+        services.AddTransient<ExcelReaderService>();
+        services.AddTransient<EntityClassGenerator>();
+        services.AddTransient<EntityConfigurationGenerator>();
+        services.AddTransient<FileWriterService>();
+        services.AddTransient<DbContextGenerator>();
+        services.AddTransient<GenerationOrchestrator>();
+        services.AddTransient<CatalogueGenerationOrchestrator>();
+        services.AddTransient<SummaryDisplayService>();
 
         return services;
     }

@@ -1,0 +1,3 @@
+- Refactor to move dacpac and entity generation related classes into the appropriate Catalogue.* structure
+- Refactor to rename the Solution DataManager, and the projects DataManager.*
+- Specify, plan, and implement Data Migration
