@@ -20,64 +20,103 @@
     Generate EF Core entity classes from CatalogueDb (Database-sourced) or from Excel + DACPAC files (File-sourced).
 </p>
 
-@* ── Mode tabs ────────────────────────────────────────────────────────────────── *@
-<ul class="nav nav-tabs mb-3">
-    <li class="nav-item">
-        <button class="nav-link @(_mode == GenMode.DatabaseSourced ? "active" : "")"
-                @onclick="() => SetMode(GenMode.DatabaseSourced)"
-                disabled="@_running">
-            &#128209;&nbsp;Database-sourced
-        </button>
-    </li>
-    <li class="nav-item">
-        <button class="nav-link @(_mode == GenMode.FileSourced ? "active" : "")"
-                @onclick="() => SetMode(GenMode.FileSourced)"
-                disabled="@_running">
-            &#128196;&nbsp;File-sourced (Excel + DACPAC)
-        </button>
-    </li>
-</ul>
-
-@if (_mode == GenMode.DatabaseSourced)
-{
-    @* ── Database-sourced: source selection ──────────────────────────────────── *@
-    <div class="card mb-3">
-        <div class="card-header fw-semibold">Source Database</div>
-        <div class="card-body row g-3" style="max-width:900px">
-            <div class="col-12">
-                <label class="form-label">Select Database</label>
-                @if (_databases.Count == 0)
-                {
-                    <div class="alert alert-warning mb-0">
-                        No databases found in CatalogueDb. Import data first via the Import pages.
-                    </div>
-                }
-                else
-                {
-                    <select class="form-select font-monospace"
-                            @bind="_selectedDatabaseId"
+@* ── Data Source card (collapsible, contains mode tabs) ─────────────────────── *@
+<div class="card mb-3">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center collapsible-header"
+         @onclick="ToggleSource">
+        <span>&#128209; Data Source</span>
+        <span class="chevron @(_sourceCollapsed ? "" : "chevron-open")">&#8250;</span>
+    </div>
+    @if (!_sourceCollapsed)
+    {
+        <div class="card-body">
+            @* ── Mode tabs ──────────────────────────────────────────────────── *@
+            <ul class="nav nav-tabs mb-3">
+                <li class="nav-item">
+                    <button class="nav-link @(_mode == GenMode.DatabaseSourced ? "active" : "")"
+                            @onclick="() => SetMode(GenMode.DatabaseSourced)"
                             disabled="@_running">
-                        <option value="-1">All Servers / Databases</option>
-                        <option value="0" disabled>── or select a specific database ──</option>
-                        @foreach (var db in _databases)
+                        &#128209;&nbsp;Database-sourced
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link @(_mode == GenMode.FileSourced ? "active" : "")"
+                            @onclick="() => SetMode(GenMode.FileSourced)"
+                            disabled="@_running">
+                        &#128196;&nbsp;File-sourced (Excel + DACPAC)
+                    </button>
+                </li>
+            </ul>
+
+            @if (_mode == GenMode.DatabaseSourced)
+            {
+                @* ── Database-sourced: source selection ─────────────────────── *@
+                <div class="row g-3" style="max-width:900px">
+                    <div class="col-12">
+                        <label class="form-label">Select Database</label>
+                        @if (_databases.Count == 0)
                         {
-                            <option value="@db.DatabaseId">
-                                [@db.ServerName].[@db.DatabaseName]&nbsp;&nbsp;(@db.SelectedForLoadCount selected for load)
-                            </option>
+                            <div class="alert alert-warning mb-0">
+                                No databases found in CatalogueDb. Import data first via the Import pages.
+                            </div>
                         }
-                    </select>
-                }
-                <div class="form-text">
-                    Columns with <em>IsSelectedForLoad = true</em> and
-                    <em>PersistenceType ≠ 'D'</em> are included in generation.
+                        else
+                        {
+                            <select class="form-select font-monospace"
+                                    @bind="_selectedDatabaseId"
+                                    disabled="@_running">
+                                <option value="-1">All Servers / Databases</option>
+                                <option value="0" disabled>── or select a specific database ──</option>
+                                @foreach (var db in _databases)
+                                {
+                                    <option value="@db.DatabaseId">
+                                        [@db.ServerName].[@db.DatabaseName]&nbsp;&nbsp;(@db.SelectedForLoadCount selected for load)
+                                    </option>
+                                }
+                            </select>
+                        }
+                        <div class="form-text">
+                            Columns with <em>IsSelectedForLoad = true</em> and
+                            <em>PersistenceType ≠ 'D'</em> are included in generation.
+                        </div>
+                    </div>
                 </div>
-            </div>
+            }
+            else
+            {
+                @* ── File-sourced: input files ──────────────────────────────── *@
+                <div class="row g-3" style="max-width:900px">
+                    <div class="col-12">
+                        <label class="form-label">Excel Mapping File</label>
+                        <input type="text" class="form-control font-monospace"
+                               placeholder="/full/path/to/mapping.xlsx"
+                               @bind="_excelFilePath" @bind:event="oninput"
+                               disabled="@_running" />
+                        <div class="form-text">Full path to the .xlsx mapping file.</div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">DACPAC Files Folder</label>
+                        <input type="text" class="form-control font-monospace"
+                               placeholder="/full/path/to/dacpacs/"
+                               @bind="_dacpacFolderPath" @bind:event="oninput"
+                               disabled="@_running" />
+                        <div class="form-text">Full path to the folder containing .dacpac files.</div>
+                    </div>
+                </div>
+            }
         </div>
-    </div>
+    }
+</div>
 
-    @* ── Database-sourced: output locations ────────────────────────────────── *@
-    <div class="card mb-3">
-        <div class="card-header fw-semibold">Output Locations</div>
+@* ── Output Locations card (collapsible, shared by both modes) ───────────────── *@
+<div class="card mb-3">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center collapsible-header"
+         @onclick="ToggleOutput">
+        <span>Output Locations</span>
+        <span class="chevron @(_outputCollapsed ? "" : "chevron-open")">&#8250;</span>
+    </div>
+    @if (!_outputCollapsed)
+    {
         <div class="card-body row g-3" style="max-width:900px">
             <div class="col-12">
                 <label class="form-label">SQL Entity &amp; Configuration Output Folder</label>
@@ -112,72 +151,8 @@
                 <div class="form-text">Full path to the .cs file where the SQLite DbContext will be written (will be overwritten).</div>
             </div>
         </div>
-    </div>
-}
-else
-{
-    @* ── File-sourced: input files ───────────────────────────────────────── *@
-    <div class="card mb-3">
-        <div class="card-header fw-semibold">Input Files</div>
-        <div class="card-body row g-3" style="max-width:900px">
-            <div class="col-12">
-                <label class="form-label">Excel Mapping File</label>
-                <input type="text" class="form-control font-monospace"
-                       placeholder="/full/path/to/mapping.xlsx"
-                       @bind="_excelFilePath" @bind:event="oninput"
-                       disabled="@_running" />
-                <div class="form-text">Full path to the .xlsx mapping file.</div>
-            </div>
-            <div class="col-12">
-                <label class="form-label">DACPAC Files Folder</label>
-                <input type="text" class="form-control font-monospace"
-                       placeholder="/full/path/to/dacpacs/"
-                       @bind="_dacpacFolderPath" @bind:event="oninput"
-                       disabled="@_running" />
-                <div class="form-text">Full path to the folder containing .dacpac files.</div>
-            </div>
-        </div>
-    </div>
-
-    @* ── File-sourced: output locations ─────────────────────────────────── *@
-    <div class="card mb-3">
-        <div class="card-header fw-semibold">Output Locations</div>
-        <div class="card-body row g-3" style="max-width:900px">
-            <div class="col-12">
-                <label class="form-label">SQL Entity &amp; Configuration Output Folder</label>
-                <input type="text" class="form-control font-monospace"
-                       placeholder="/full/path/to/output/entities/"
-                       @bind="_sqlEntityAndConfigOutputPath" @bind:event="oninput"
-                       disabled="@_running" />
-                <div class="form-text">Folder where generated SQL Server entity and configuration .cs files will be written.</div>
-            </div>
-            <div class="col-12">
-                <label class="form-label">SQL DbContext File</label>
-                <input type="text" class="form-control font-monospace"
-                       placeholder="/full/path/to/MyDbContext.cs"
-                       @bind="_sqlDbContextFilePath" @bind:event="oninput"
-                       disabled="@_running" />
-                <div class="form-text">Full path to the .cs file where the SQL Server DbContext will be written (will be overwritten).</div>
-            </div>
-            <div class="col-12">
-                <label class="form-label">SQLite Configuration Output Folder</label>
-                <input type="text" class="form-control font-monospace"
-                       placeholder="/full/path/to/output/sqlite/"
-                       @bind="_sqliteConfigOutputPath" @bind:event="oninput"
-                       disabled="@_running" />
-                <div class="form-text">Folder where generated SQLite configuration .cs files will be written.</div>
-            </div>
-            <div class="col-12">
-                <label class="form-label">SQLite DbContext File</label>
-                <input type="text" class="form-control font-monospace"
-                       placeholder="/full/path/to/MySQLiteDbContext.cs"
-                       @bind="_sqliteDbContextFilePath" @bind:event="oninput"
-                       disabled="@_running" />
-                <div class="form-text">Full path to the .cs file where the SQLite DbContext will be written (will be overwritten).</div>
-            </div>
-        </div>
-    </div>
-}
+    }
+</div>
 
 @* ── Validation errors ────────────────────────────────────────────────────── *@
 @if (_validationErrors.Count > 0)
@@ -217,7 +192,8 @@ else
 @if (_logLines.Count > 0 || _running)
 {
     <ProgressLog Lines="_logLines" Running="_running" OnClear="ClearLog"
-                 Title="Progress Log" CardMarginClass="mb-4" />
+                 Title="Progress Log" CardMarginClass="mb-4"
+                 FillHeight="@(_sourceCollapsed && _outputCollapsed)" />
 }
 
 @* ── Result ───────────────────────────────────────────────────────────── *@
@@ -267,6 +243,13 @@ else
     // ── Generation mode ───────────────────────────────────────────────────────
     private enum GenMode { DatabaseSourced, FileSourced }
     private GenMode _mode = GenMode.DatabaseSourced;
+
+    // ── Section collapse state ────────────────────────────────────────────────
+    private bool _sourceCollapsed  = false;
+    private bool _outputCollapsed  = false;
+
+    private void ToggleSource() { if (!_running) _sourceCollapsed = !_sourceCollapsed; }
+    private void ToggleOutput() { if (!_running) _outputCollapsed = !_outputCollapsed; }
 
     // ── Path inputs (shared + file-sourced) ───────────────────────────────────
     private string _excelFilePath               = string.Empty;
@@ -343,10 +326,12 @@ else
             return;
         }
 
-        _result  = null;
+        _result          = null;
         _logLines.Clear();
-        _running = true;
-        _cts     = new CancellationTokenSource();
+        _sourceCollapsed = true;
+        _outputCollapsed = true;
+        _running         = true;
+        _cts             = new CancellationTokenSource();
         StateHasChanged();
 
         try

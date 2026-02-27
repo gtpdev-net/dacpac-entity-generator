@@ -8,7 +8,7 @@
     </div>
     <div class="card-body p-0">
         <div id="@_elementId"
-             style="font-family:monospace;font-size:.82rem;max-height:@MaxHeight;overflow-y:auto;padding:.75rem;background:#000;color:#e8e8e8;">
+             style="font-family:monospace;font-size:.82rem;@(FillHeight ? "height:calc(100vh - 260px);min-height:200px;" : $"max-height:{MaxHeight};")overflow-y:auto;padding:.75rem;background:#000;color:#e8e8e8;">
             @foreach (var entry in Lines)
             {
                 <div class="@LineClass(entry.Level)">@entry.Message</div>
@@ -31,8 +31,11 @@
     /// <summary>Called when the user clicks Clear.</summary>
     [Parameter] public EventCallback OnClear { get; set; }
 
-    /// <summary>CSS max-height of the scrollable panel (default: 400px).</summary>
+    /// <summary>CSS max-height of the scrollable panel (default: 400px). Ignored when FillHeight is true.</summary>
     [Parameter] public string MaxHeight { get; set; } = "400px";
+
+    /// <summary>When true, the panel fills remaining viewport height instead of using MaxHeight.</summary>
+    [Parameter] public bool FillHeight { get; set; }
 
     /// <summary>Header text (default: "Progress").</summary>
     [Parameter] public string Title { get; set; } = "Progress";

@@ -1,0 +1,29 @@
+/* EfGeneration scoped styles */
+
+/* ── Collapsible card headers ─────────────────────────────────────────────── */
+
+.collapsible-header {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.15s ease;
+}
+
+.collapsible-header:hover {
+    background-color: rgba(0, 0, 0, 0.06);
+}
+
+/* ── Collapse chevron indicator ───────────────────────────────────────────── */
+
+.chevron {
+    display: inline-block;
+    font-size: 1.2rem;
+    font-weight: bold;
+    line-height: 1;
+    transform: rotate(0deg);
+    transition: transform 0.2s ease;
+    color: #6c757d;
+}
+
+.chevron.chevron-open {
+    transform: rotate(90deg);
+}
