@@ -18,4 +18,10 @@ public class DacpacImportResult
     public int ForeignKeysImported { get; set; }
     public int TriggersImported { get; set; }
     public List<string> Errors { get; set; } = new();
+
+    /// <summary>True when the import was skipped because the DACPAC model is identical to the last import.</summary>
+    public bool WasSkipped { get; set; }
+
+    /// <summary>Human-readable reason the import was skipped, if <see cref="WasSkipped"/> is true.</summary>
+    public string? SkipReason { get; set; }
 }

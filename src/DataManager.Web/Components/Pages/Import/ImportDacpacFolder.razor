@@ -28,20 +28,31 @@
     <div class="mb-4">
         @foreach (var r in _results)
         {
-            <div class="alert @(r.Success ? "alert-success" : "alert-danger") mb-2">
+            var alertClass = r.WasSkipped ? "alert-secondary" : (r.Success ? "alert-success" : "alert-danger");
+            <div class="alert @alertClass mb-2">
                 <strong>@r.ServerName \ @r.DatabaseName</strong>
-                @if (!r.Success) { <span class="text-danger ms-2">— failed</span> }
-                <div class="row g-2 mt-1 flex-wrap">
-                    <div class="col-auto"><span class="badge bg-secondary">Tables: @r.TablesProcessed</span></div>
-                    <div class="col-auto"><span class="badge bg-primary">Cols updated: @r.ColumnsUpdated</span></div>
-                    <div class="col-auto"><span class="badge bg-info text-dark">Cols created: @r.ColumnsCreated</span></div>
-                    <div class="col-auto"><span class="badge bg-success">Views: @r.ViewsImported</span></div>
-                    <div class="col-auto"><span class="badge bg-warning text-dark">Procs: @r.StoredProceduresImported</span></div>
-                    <div class="col-auto"><span class="badge bg-warning text-dark">Functions: @r.FunctionsImported</span></div>
-                    <div class="col-auto"><span class="badge bg-secondary">Indexes: @r.IndexesImported</span></div>
-                    <div class="col-auto"><span class="badge bg-secondary">FKs: @r.ForeignKeysImported</span></div>
-                    <div class="col-auto"><span class="badge bg-secondary">Triggers: @r.TriggersImported</span></div>
-                </div>
+                @if (r.WasSkipped)
+                {
+                    <span class="ms-2 text-muted fst-italic">— unchanged, skipped</span>
+                }
+                else if (!r.Success)
+                {
+                    <span class="text-danger ms-2">— failed</span>
+                }
+                @if (!r.WasSkipped)
+                {
+                    <div class="row g-2 mt-1 flex-wrap">
+                        <div class="col-auto"><span class="badge bg-secondary">Tables: @r.TablesProcessed</span></div>
+                        <div class="col-auto"><span class="badge bg-primary">Cols updated: @r.ColumnsUpdated</span></div>
+                        <div class="col-auto"><span class="badge bg-info text-dark">Cols created: @r.ColumnsCreated</span></div>
+                        <div class="col-auto"><span class="badge bg-success">Views: @r.ViewsImported</span></div>
+                        <div class="col-auto"><span class="badge bg-warning text-dark">Procs: @r.StoredProceduresImported</span></div>
+                        <div class="col-auto"><span class="badge bg-warning text-dark">Functions: @r.FunctionsImported</span></div>
+                        <div class="col-auto"><span class="badge bg-secondary">Indexes: @r.IndexesImported</span></div>
+                        <div class="col-auto"><span class="badge bg-secondary">FKs: @r.ForeignKeysImported</span></div>
+                        <div class="col-auto"><span class="badge bg-secondary">Triggers: @r.TriggersImported</span></div>
+                    </div>
+                }
                 @foreach (var err in r.Errors)
                 {
                     <div class="text-danger mt-1 small">@err</div>
@@ -108,13 +119,19 @@
 
             _results.AddRange(folderResults);
 
-            var successCount = _results.Count(r => r.Success);
-            if (successCount == _results.Count && _results.Count > 0)
-                Notify.Success($"Imported {successCount} database(s) successfully.");
-            else if (successCount > 0)
-                Notify.Warning($"Imported {successCount} of {_results.Count} database(s) — some had errors.");
-            else if (_results.Count == 0)
+            var successCount = _results.Count(r => r.Success && !r.WasSkipped);
+            var skipCount    = _results.Count(r => r.WasSkipped);
+            var failCount    = _results.Count(r => !r.Success);
+
+            if (_results.Count == 0)
                 Notify.Warning("No .dacpac files found in the specified folder.");
+            else if (failCount == 0 && successCount == 0)
+                Notify.Info($"All {skipCount} DACPAC file(s) are unchanged — nothing to import.");
+            else if (failCount == 0)
+                Notify.Success($"Imported {successCount} database(s) successfully." +
+                               (skipCount > 0 ? $" {skipCount} unchanged and skipped." : string.Empty));
+            else if (successCount > 0 || skipCount > 0)
+                Notify.Warning($"Imported {successCount}, skipped {skipCount}, failed {failCount} of {_results.Count} database(s).");
             else
                 Notify.Error("All imports failed — see details.");
         }

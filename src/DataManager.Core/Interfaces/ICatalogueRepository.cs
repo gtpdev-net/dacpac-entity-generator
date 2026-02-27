@@ -79,6 +79,7 @@ public interface IDataManagerRepository
     Task<IReadOnlyList<SourceForeignKeySummary>> GetForeignKeysAsync(int tableId);
 
     // --- Schema import (bulk operations) ---
+    Task UpdateDatabaseHashAsync(int databaseId, string modelHash);
     Task DeleteSchemaForDatabaseAsync(int databaseId);
     Task BulkInsertViewsAsync(IEnumerable<SourceView> views);
     Task BulkInsertStoredProceduresAsync(IEnumerable<SourceStoredProcedure> procedures);

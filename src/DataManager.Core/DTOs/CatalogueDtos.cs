@@ -11,6 +11,8 @@ public class SourceDatabaseInfo
     public int TableCount { get; set; }
     public int InScopeColumnCount { get; set; }
     public int SelectedForLoadCount { get; set; }
+    /// <summary>SHA-256 hex digest of the model.xml from the last successful import; null if never imported.</summary>
+    public string? LastImportedModelHash { get; set; }
 }
 
 public class SourceTableInfo

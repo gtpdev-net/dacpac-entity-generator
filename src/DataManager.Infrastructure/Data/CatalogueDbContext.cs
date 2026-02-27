@@ -58,6 +58,7 @@ public class DataManagerDbContext : DbContext
             e.Property(x => x.Description).HasMaxLength(1000);
             e.Property(x => x.IsActive).HasDefaultValue(true);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+            e.Property(x => x.LastImportedModelHash).HasMaxLength(64);
             e.HasIndex(x => new { x.SourceId, x.DatabaseName }).IsUnique()
                 .HasDatabaseName("UQ_SourceDatabases_ServerDb");
             e.HasOne(x => x.Source)

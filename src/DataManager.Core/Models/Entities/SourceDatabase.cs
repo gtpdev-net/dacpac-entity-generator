@@ -12,6 +12,15 @@ public class SourceDatabase
     public DateTime? ModifiedAt { get; set; }
     public string? ModifiedBy { get; set; }
 
+    /// <summary>
+    /// SHA-256 hex digest of the <c>model.xml</c> content from the most recent successful import.
+    /// Used to skip re-importing an unchanged DACPAC file.
+    /// </summary>
+    public string? LastImportedModelHash { get; set; }
+
+    /// <summary>UTC timestamp of the most recent successful import that wrote to this database.</summary>
+    public DateTime? LastImportedAt { get; set; }
+
     public Source Source { get; set; } = null!;
     public ICollection<SourceTable> Tables { get; set; } = new List<SourceTable>();
 

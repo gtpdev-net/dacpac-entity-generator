@@ -2,6 +2,7 @@ using DataManager.Core.Abstractions;
 using DataManager.Core.Interfaces;
 using DataManager.Core.Models.Entities;
 using DataManager.Core.Models.Dacpac;
+using DataManager.Core.Utilities;
 using DataManager.Infrastructure.Dacpac;
 
 namespace DataManager.Infrastructure.Import;
@@ -124,6 +125,9 @@ public class DacpacSchemaImportService
                 return result;
             }
 
+            // Compute a content hash early so we can skip all DB work if the DACPAC is unchanged.
+            var modelHash = HashHelper.Sha256Hex(modelXml);
+
             var doc = _parser.PrepareDocument(modelXml, serverName, databaseName);
             if (doc is null)
             {
@@ -174,6 +178,18 @@ public class DacpacSchemaImportService
             else
             {
                 databaseId = dbInfo.DatabaseId;
+
+                // ── Early-exit: skip if the DACPAC model is identical to the previous import ──
+                if (!string.IsNullOrEmpty(dbInfo.LastImportedModelHash) &&
+                    string.Equals(dbInfo.LastImportedModelHash, modelHash, StringComparison.Ordinal))
+                {
+                    _logger.LogProgress(
+                        $"DACPAC unchanged for {serverName}/{databaseName} — skipping import.");
+                    result.Success    = true;
+                    result.WasSkipped = true;
+                    result.SkipReason = "DACPAC model.xml content is identical to the previous import.";
+                    return result;
+                }
             }
 
             // ── 4. Upsert SourceTables and enrich SourceColumn schema metadata
@@ -384,6 +400,9 @@ public class DacpacSchemaImportService
 
             await _repository.BulkInsertFunctionsAsync(sourceFunctions);
             result.FunctionsImported = sourceFunctions.Count;
+
+            // ── Persist the model hash so the next import can skip if unchanged ──
+            await _repository.UpdateDatabaseHashAsync(databaseId, modelHash);
 
             result.Success = true;
             _logger.LogProgress(

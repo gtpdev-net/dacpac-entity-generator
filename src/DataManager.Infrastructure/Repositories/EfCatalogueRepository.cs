@@ -78,7 +78,8 @@ public class EfDataManagerRepository : IDataManagerRepository
             SelectedForLoadCount = d.Tables
                 .Where(t => t.IsActive)
                 .SelectMany(t => t.Columns)
-                .Count(c => c.IsActive && c.IsSelectedForLoad)
+                .Count(c => c.IsActive && c.IsSelectedForLoad),
+            LastImportedModelHash = d.LastImportedModelHash
         }).OrderBy(d => d.ServerName).ThenBy(d => d.DatabaseName).ToListAsync();
     }
 
@@ -516,6 +517,17 @@ public class EfDataManagerRepository : IDataManagerRepository
     }
 
     // ── Schema import ────────────────────────────────────────────────────────
+
+    public async Task UpdateDatabaseHashAsync(int databaseId, string modelHash)
+    {
+        var db = await _db.SourceDatabases.FindAsync(databaseId)
+            ?? throw new InvalidOperationException($"SourceDatabase {databaseId} not found.");
+
+        db.LastImportedModelHash = modelHash;
+        db.LastImportedAt = DateTime.UtcNow;
+        db.ModifiedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+    }
 
     public async Task DeleteSchemaForDatabaseAsync(int databaseId)
     {
