@@ -80,20 +80,36 @@
         <div class="card-header fw-semibold">Output Locations</div>
         <div class="card-body row g-3" style="max-width:900px">
             <div class="col-12">
-                <label class="form-label">Entity Output Folder</label>
+                <label class="form-label">SQL Entity &amp; Configuration Output Folder</label>
                 <input type="text" class="form-control font-monospace"
                        placeholder="/full/path/to/output/entities/"
-                       @bind="_entityOutputPath" @bind:event="oninput"
+                       @bind="_sqlEntityAndConfigOutputPath" @bind:event="oninput"
                        disabled="@_running" />
-                <div class="form-text">Full path to the folder where generated entity .cs files will be written.</div>
+                <div class="form-text">Folder where generated SQL Server entity and configuration .cs files will be written.</div>
             </div>
             <div class="col-12">
-                <label class="form-label">DbContext File</label>
+                <label class="form-label">SQL DbContext File</label>
                 <input type="text" class="form-control font-monospace"
                        placeholder="/full/path/to/MyDbContext.cs"
-                       @bind="_dbContextFilePath" @bind:event="oninput"
+                       @bind="_sqlDbContextFilePath" @bind:event="oninput"
                        disabled="@_running" />
-                <div class="form-text">Full path to the .cs file where the DbContext will be written (will be overwritten).</div>
+                <div class="form-text">Full path to the .cs file where the SQL Server DbContext will be written (will be overwritten).</div>
+            </div>
+            <div class="col-12">
+                <label class="form-label">SQLite Configuration Output Folder</label>
+                <input type="text" class="form-control font-monospace"
+                       placeholder="/full/path/to/output/sqlite/"
+                       @bind="_sqliteConfigOutputPath" @bind:event="oninput"
+                       disabled="@_running" />
+                <div class="form-text">Folder where generated SQLite configuration .cs files will be written.</div>
+            </div>
+            <div class="col-12">
+                <label class="form-label">SQLite DbContext File</label>
+                <input type="text" class="form-control font-monospace"
+                       placeholder="/full/path/to/MySQLiteDbContext.cs"
+                       @bind="_sqliteDbContextFilePath" @bind:event="oninput"
+                       disabled="@_running" />
+                <div class="form-text">Full path to the .cs file where the SQLite DbContext will be written (will be overwritten).</div>
             </div>
         </div>
     </div>
@@ -128,20 +144,36 @@ else
         <div class="card-header fw-semibold">Output Locations</div>
         <div class="card-body row g-3" style="max-width:900px">
             <div class="col-12">
-                <label class="form-label">Entity Output Folder</label>
+                <label class="form-label">SQL Entity &amp; Configuration Output Folder</label>
                 <input type="text" class="form-control font-monospace"
                        placeholder="/full/path/to/output/entities/"
-                       @bind="_entityOutputPath" @bind:event="oninput"
+                       @bind="_sqlEntityAndConfigOutputPath" @bind:event="oninput"
                        disabled="@_running" />
-                <div class="form-text">Full path to the folder where generated entity .cs files will be written.</div>
+                <div class="form-text">Folder where generated SQL Server entity and configuration .cs files will be written.</div>
             </div>
             <div class="col-12">
-                <label class="form-label">DbContext File</label>
+                <label class="form-label">SQL DbContext File</label>
                 <input type="text" class="form-control font-monospace"
                        placeholder="/full/path/to/MyDbContext.cs"
-                       @bind="_dbContextFilePath" @bind:event="oninput"
+                       @bind="_sqlDbContextFilePath" @bind:event="oninput"
                        disabled="@_running" />
-                <div class="form-text">Full path to the .cs file where the DbContext will be written (will be overwritten).</div>
+                <div class="form-text">Full path to the .cs file where the SQL Server DbContext will be written (will be overwritten).</div>
+            </div>
+            <div class="col-12">
+                <label class="form-label">SQLite Configuration Output Folder</label>
+                <input type="text" class="form-control font-monospace"
+                       placeholder="/full/path/to/output/sqlite/"
+                       @bind="_sqliteConfigOutputPath" @bind:event="oninput"
+                       disabled="@_running" />
+                <div class="form-text">Folder where generated SQLite configuration .cs files will be written.</div>
+            </div>
+            <div class="col-12">
+                <label class="form-label">SQLite DbContext File</label>
+                <input type="text" class="form-control font-monospace"
+                       placeholder="/full/path/to/MySQLiteDbContext.cs"
+                       @bind="_sqliteDbContextFilePath" @bind:event="oninput"
+                       disabled="@_running" />
+                <div class="form-text">Full path to the .cs file where the SQLite DbContext will be written (will be overwritten).</div>
             </div>
         </div>
     </div>
@@ -254,10 +286,12 @@ else
     private GenMode _mode = GenMode.DatabaseSourced;
 
     // ── Path inputs (shared + file-sourced) ───────────────────────────────────
-    private string _excelFilePath     = string.Empty;
-    private string _dacpacFolderPath  = string.Empty;
-    private string _entityOutputPath  = string.Empty;
-    private string _dbContextFilePath = string.Empty;
+    private string _excelFilePath               = string.Empty;
+    private string _dacpacFolderPath            = string.Empty;
+    private string _sqlEntityAndConfigOutputPath = string.Empty;
+    private string _sqlDbContextFilePath         = string.Empty;
+    private string _sqliteConfigOutputPath       = string.Empty;
+    private string _sqliteDbContextFilePath      = string.Empty;
 
     // ── Database-sourced inputs ───────────────────────────────────────────────
     private IReadOnlyList<SourceDatabaseInfo> _databases = Array.Empty<SourceDatabaseInfo>();
@@ -291,12 +325,16 @@ else
     private bool CanGenerate => !_running && (
         _mode == GenMode.DatabaseSourced
             ? _selectedDatabaseId != 0
-              && !string.IsNullOrWhiteSpace(_entityOutputPath)
-              && !string.IsNullOrWhiteSpace(_dbContextFilePath)
+              && !string.IsNullOrWhiteSpace(_sqlEntityAndConfigOutputPath)
+              && !string.IsNullOrWhiteSpace(_sqlDbContextFilePath)
+              && !string.IsNullOrWhiteSpace(_sqliteConfigOutputPath)
+              && !string.IsNullOrWhiteSpace(_sqliteDbContextFilePath)
             : !string.IsNullOrWhiteSpace(_excelFilePath)
               && !string.IsNullOrWhiteSpace(_dacpacFolderPath)
-              && !string.IsNullOrWhiteSpace(_entityOutputPath)
-              && !string.IsNullOrWhiteSpace(_dbContextFilePath));
+              && !string.IsNullOrWhiteSpace(_sqlEntityAndConfigOutputPath)
+              && !string.IsNullOrWhiteSpace(_sqlDbContextFilePath)
+              && !string.IsNullOrWhiteSpace(_sqliteConfigOutputPath)
+              && !string.IsNullOrWhiteSpace(_sqliteDbContextFilePath));
 
     // ── Generation dispatch ───────────────────────────────────────────────────
     private async Task RunGeneration()
@@ -312,8 +350,10 @@ else
             if (!Directory.Exists(_dacpacFolderPath.Trim()))
                 _validationErrors.Add($"DACPAC folder not found: {_dacpacFolderPath.Trim()}");
         }
-        if (!Directory.Exists(_entityOutputPath.Trim()))
-            _validationErrors.Add($"Entity output folder not found: {_entityOutputPath.Trim()}");
+        if (!Directory.Exists(_sqlEntityAndConfigOutputPath.Trim()))
+            _validationErrors.Add($"SQL entity/config output folder not found: {_sqlEntityAndConfigOutputPath.Trim()}");
+        if (!Directory.Exists(_sqliteConfigOutputPath.Trim()))
+            _validationErrors.Add($"SQLite config output folder not found: {_sqliteConfigOutputPath.Trim()}");
 
         if (_validationErrors.Count > 0)
         {
@@ -353,20 +393,14 @@ else
     // ── Database-sourced pipeline ─────────────────────────────────────────────
     private async Task RunDatabaseSourcedAsync()
     {
-        var entityOutput = _entityOutputPath.Trim();
-        var dbContextOut = _dbContextFilePath.Trim();
-
-        _tempDir = Path.Combine(Path.GetTempPath(), "efgen_db_" + Guid.NewGuid().ToString("N"));
-        var tempOutput = Path.Combine(_tempDir, "_output");
-        Directory.CreateDirectory(tempOutput);
-
-        // Configure the CatalogueDb data source for the selected database
         DataSource.DatabaseId = _selectedDatabaseId;
 
-        _result = await DbOrchestrator.RunAsync(DataSource, tempOutput);
-
-        if (_result.Success && (_result.EntitiesGenerated > 0 || _result.ViewsGenerated > 0))
-            CopyOutputFiles(tempOutput, entityOutput, dbContextOut);
+        _result = await DbOrchestrator.RunAsync(
+            DataSource,
+            _sqlEntityAndConfigOutputPath.Trim(),
+            _sqlDbContextFilePath.Trim(),
+            _sqliteConfigOutputPath.Trim(),
+            _sqliteDbContextFilePath.Trim());
     }
 
     // ── File-sourced pipeline ─────────────────────────────────────────────────
@@ -374,14 +408,10 @@ else
     {
         var excelPath    = _excelFilePath.Trim();
         var dacpacFolder = _dacpacFolderPath.Trim();
-        var entityOutput = _entityOutputPath.Trim();
-        var dbContextOut = _dbContextFilePath.Trim();
 
         _tempDir = Path.Combine(Path.GetTempPath(), "efgen_" + Guid.NewGuid().ToString("N"));
-        var tempInput  = Path.Combine(_tempDir, "_input");
-        var tempOutput = Path.Combine(_tempDir, "_output");
+        var tempInput = Path.Combine(_tempDir, "_input");
         Directory.CreateDirectory(tempInput);
-        Directory.CreateDirectory(tempOutput);
 
         File.Copy(excelPath, Path.Combine(tempInput, Path.GetFileName(excelPath)), overwrite: true);
 
@@ -390,34 +420,12 @@ else
         foreach (var dacpac in Directory.EnumerateFiles(dacpacFolder, "*.dacpac", SearchOption.TopDirectoryOnly))
             File.Copy(dacpac, Path.Combine(tempDacpacs, Path.GetFileName(dacpac)), overwrite: true);
 
-        _result = await Task.Run(() => Orchestrator.Run(tempInput, tempOutput));
-
-        if (_result.Success)
-            CopyOutputFiles(tempOutput, entityOutput, dbContextOut);
-    }
-
-    // ── Shared output copy ────────────────────────────────────────────────────
-    private static void CopyOutputFiles(string tempOutput, string entityOutput, string dbContextOut)
-    {
-        foreach (var filePath in Directory.EnumerateFiles(tempOutput, "*", SearchOption.AllDirectories))
-        {
-            var fileName = Path.GetFileName(filePath);
-
-            if (fileName.EndsWith("DbContext.cs", StringComparison.OrdinalIgnoreCase))
-            {
-                var dbContextDir = Path.GetDirectoryName(dbContextOut);
-                if (!string.IsNullOrEmpty(dbContextDir))
-                    Directory.CreateDirectory(dbContextDir);
-                File.Copy(filePath, dbContextOut, overwrite: true);
-            }
-            else
-            {
-                var relativePath = Path.GetRelativePath(tempOutput, filePath);
-                var destPath     = Path.Combine(entityOutput, relativePath);
-                Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
-                File.Copy(filePath, destPath, overwrite: true);
-            }
-        }
+        _result = await Task.Run(() => Orchestrator.Run(
+            tempInput,
+            _sqlEntityAndConfigOutputPath.Trim(),
+            _sqlDbContextFilePath.Trim(),
+            _sqliteConfigOutputPath.Trim(),
+            _sqliteDbContextFilePath.Trim()));
     }
 
     private void Cancel() => _cts?.Cancel();

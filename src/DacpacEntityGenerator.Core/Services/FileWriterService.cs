@@ -171,4 +171,64 @@ public class FileWriterService
             return false;
         }
     }
+
+    /// <summary>
+    /// Writes <paramref name="code"/> to an exact file path specified by the
+    /// caller.  Parent directories are created automatically.
+    /// </summary>
+    public bool WriteToPath(string filePath, string code)
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrEmpty(dir))
+                Directory.CreateDirectory(dir);
+
+            File.WriteAllText(filePath, code, Encoding.UTF8);
+            _logger.LogProgress($"Generated: {filePath}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"Failed to write file '{filePath}': {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Writes a SQLite EF Core configuration file for a server/database pair.
+    /// Output path: <c>{outputDirectory}/Configuration/{Server}/{Database}/SQLite/{Database}SQLiteEntityConfiguration.cs</c>
+    /// </summary>
+    public bool WriteSQLiteConfigurationFile(
+        string outputDirectory,
+        string server,
+        string database,
+        string configurationClassCode)
+    {
+        try
+        {
+            var configDir   = Path.Combine(outputDirectory, "Configuration");
+            var serverDir   = Path.Combine(configDir, server);
+            var databaseDir = Path.Combine(serverDir, database);
+            var sqliteDir   = Path.Combine(databaseDir, "SQLite");
+
+            Directory.CreateDirectory(sqliteDir);
+
+            var databasePascal = NameConverter.ToPascalCase(database);
+            var fileName   = $"{databasePascal}SQLiteEntityConfiguration.cs";
+            var filePath   = Path.Combine(sqliteDir, fileName);
+
+            File.WriteAllText(filePath, configurationClassCode, Encoding.UTF8);
+
+            var relativePath = Path.GetRelativePath(outputDirectory, filePath);
+            _logger.LogProgress($"[{server}].[{database}] - Generated SQLite configuration: ./output/{relativePath.Replace('\\', '/')}");
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"[{server}].[{database}] - Failed to write SQLite configuration file: {ex.Message}");
+            return false;
+        }
+    }
 }

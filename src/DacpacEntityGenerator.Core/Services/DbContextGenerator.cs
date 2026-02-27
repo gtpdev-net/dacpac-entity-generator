@@ -182,6 +182,182 @@ public class DbContextGenerator
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Generates a SQLite <c>DbContext</c> file.  The class is named
+    /// <c>SQLiteDbContext</c>, lives in the
+    /// <c>DataLayer.Infrastructure.Persistence.Contexts.SQLite</c> namespace, and
+    /// references the <c>{Database}SQLiteEntityConfiguration</c> classes produced by
+    /// <c>EntityConfigurationGenerator.GenerateCombinedSQLiteConfiguration</c>.
+    /// The DbSet properties are identical to those in the SQL Server variant because
+    /// both contexts use the same shared entity classes.
+    /// </summary>
+    public string GenerateSQLiteDbContext(
+        List<TableDefinition> allTables,
+        List<ViewDefinition> allViews,
+        List<(string Server, string Database)> serverDatabasePairs)
+    {
+        var sb = new StringBuilder();
+
+        sb.AppendLine("/* This is generated code - do not modify directly */");
+
+        // Generate using statements
+        sb.AppendLine("using Microsoft.EntityFrameworkCore;");
+        sb.AppendLine("using DataLayer.Infrastructure.Persistence.Contexts.Base;");
+        sb.AppendLine();
+
+        // Shared entity namespaces (same as SQL Server — entities are shared)
+        var entityNamespaces = new HashSet<string>();
+
+        foreach (var table in allTables)
+        {
+            var ns = $"DataLayer.Core.Entities.{NameConverter.ToPascalCase(table.Server)}.{NameConverter.ToPascalCase(table.Database)}";
+            entityNamespaces.Add(ns);
+        }
+
+        foreach (var view in allViews)
+        {
+            var ns = $"DataLayer.Core.Entities.{NameConverter.ToPascalCase(view.Server)}.{NameConverter.ToPascalCase(view.Database)}";
+            entityNamespaces.Add(ns);
+        }
+
+        // Configuration namespaces — use the SQLite sub-namespace
+        foreach (var (server, database) in serverDatabasePairs)
+        {
+            var serverPascal   = NameConverter.ToPascalCase(server);
+            var databasePascal = NameConverter.ToPascalCase(database);
+            var configNs = $"DataLayer.Core.Configuration.{serverPascal}.{databasePascal}.SQLite";
+            entityNamespaces.Add(configNs);
+        }
+
+        foreach (var ns in entityNamespaces.OrderBy(x => x))
+        {
+            sb.AppendLine($"using {ns};");
+        }
+
+        sb.AppendLine();
+
+        // Detect naming conflicts across databases
+        var conflictingNames = DetectDbSetNameConflicts(allTables, allViews);
+
+        // Namespace declaration
+        sb.AppendLine("namespace DataLayer.Infrastructure.Persistence.Contexts.SQLite");
+        sb.AppendLine("{");
+
+        // Class declaration
+        sb.AppendLine("    public partial class SQLiteDbContext(DbContextOptions<SQLiteDbContext> options) : BaseDbContext(options)");
+        sb.AppendLine("    {");
+
+        // Generate DbSet properties for all tables
+        if (allTables.Count > 0)
+        {
+            sb.AppendLine("        // Table Entity DbSets");
+            var groupedTables = allTables
+                .GroupBy(t => new { t.Server, t.Database })
+                .OrderBy(g => g.Key.Server)
+                .ThenBy(g => g.Key.Database);
+
+            foreach (var group in groupedTables)
+            {
+                var serverPascal   = NameConverter.ToPascalCase(group.Key.Server);
+                var databasePascal = NameConverter.ToPascalCase(group.Key.Database);
+
+                sb.AppendLine();
+                sb.AppendLine($"        // [{group.Key.Server}].[{group.Key.Database}]");
+
+                foreach (var table in group.OrderBy(t => t.TableName))
+                {
+                    var className = NameConverter.ToPascalCase(table.TableName);
+
+                    bool propertyNameConflict = table.Columns
+                        .Select(c => NameConverter.ToPascalCase(c.Name))
+                        .Any(pn => pn == className);
+                    if (propertyNameConflict)
+                        className += "Entity";
+
+                    var fullyQualifiedType = $"{serverPascal}.{databasePascal}.{className}";
+                    var pluralName         = NameConverter.Pluralize(className);
+
+                    var dbSetPropertyName = conflictingNames.Contains(pluralName)
+                        ? $"{databasePascal}{pluralName}"
+                        : pluralName;
+
+                    sb.AppendLine($"        public DbSet<DataLayer.Core.Entities.{fullyQualifiedType}> {dbSetPropertyName} {{ get; set; }} = null!;");
+                }
+            }
+        }
+
+        // Generate DbSet properties for all views
+        if (allViews.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("        // View Entity DbSets");
+            var groupedViews = allViews
+                .GroupBy(v => new { v.Server, v.Database })
+                .OrderBy(g => g.Key.Server)
+                .ThenBy(g => g.Key.Database);
+
+            foreach (var group in groupedViews)
+            {
+                var serverPascal   = NameConverter.ToPascalCase(group.Key.Server);
+                var databasePascal = NameConverter.ToPascalCase(group.Key.Database);
+
+                sb.AppendLine();
+                sb.AppendLine($"        // [{group.Key.Server}].[{group.Key.Database}]");
+
+                foreach (var view in group.OrderBy(v => v.ViewName))
+                {
+                    var className = NameConverter.ToPascalCase(view.ViewName);
+
+                    bool propertyNameConflict = view.Columns
+                        .Select(c => NameConverter.ToPascalCase(c.Name))
+                        .Any(pn => pn == className);
+                    if (propertyNameConflict)
+                        className += "View";
+
+                    var fullyQualifiedType = $"{serverPascal}.{databasePascal}.{className}";
+                    var pluralName         = NameConverter.Pluralize(className);
+
+                    var dbSetPropertyName = conflictingNames.Contains(pluralName)
+                        ? $"{databasePascal}{pluralName}"
+                        : pluralName;
+
+                    sb.AppendLine($"        public DbSet<DataLayer.Core.Entities.{fullyQualifiedType}> {dbSetPropertyName} {{ get; set; }} = null!;");
+                }
+            }
+        }
+
+        sb.AppendLine();
+
+        // OnModelCreating method
+        sb.AppendLine("        protected override void OnModelCreating(ModelBuilder modelBuilder)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            base.OnModelCreating(modelBuilder);");
+        sb.AppendLine();
+
+        // Generate configuration calls — use SQLite configuration classes
+        if (serverDatabasePairs.Count > 0)
+        {
+            sb.AppendLine("            // Entity Configurations");
+            foreach (var (server, database) in serverDatabasePairs.OrderBy(x => x.Server).ThenBy(x => x.Database))
+            {
+                var databasePascal = NameConverter.ToPascalCase(database);
+                var configClass    = $"{databasePascal}SQLiteEntityConfiguration";
+
+                sb.AppendLine($"            {configClass}.Configure(modelBuilder);");
+            }
+        }
+
+        sb.AppendLine("        }");
+
+        // Close class
+        sb.AppendLine("    }");
+
+        // Close namespace
+        sb.AppendLine("}");
+
+        return sb.ToString();
+    }
+
     private HashSet<string> DetectDbSetNameConflicts(
         List<TableDefinition> allTables,
         List<ViewDefinition> allViews)

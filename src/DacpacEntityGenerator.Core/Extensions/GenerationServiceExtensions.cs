@@ -14,6 +14,7 @@ public static class GenerationServiceExtensions
     {
         services.AddTransient<ExcelReaderService>();
         services.AddTransient<EntityClassGenerator>();
+        services.AddTransient<EntityConfigurationGenerator>();
         services.AddTransient<FileWriterService>();
         services.AddTransient<DbContextGenerator>();
         services.AddTransient<GenerationOrchestrator>();

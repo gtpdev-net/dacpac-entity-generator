@@ -12,18 +12,21 @@ namespace DacpacEntityGenerator.Core.Services;
 /// </summary>
 public class CatalogueGenerationOrchestrator
 {
-    private readonly EntityClassGenerator _entityGenerator;
-    private readonly FileWriterService    _fileWriter;
-    private readonly DbContextGenerator  _dbContextGenerator;
-    private readonly IGenerationLogger   _logger;
+    private readonly EntityClassGenerator         _entityGenerator;
+    private readonly EntityConfigurationGenerator _configGenerator;
+    private readonly FileWriterService            _fileWriter;
+    private readonly DbContextGenerator           _dbContextGenerator;
+    private readonly IGenerationLogger            _logger;
 
     public CatalogueGenerationOrchestrator(
-        EntityClassGenerator entityGenerator,
-        FileWriterService    fileWriter,
-        DbContextGenerator   dbContextGenerator,
-        IGenerationLogger    logger)
+        EntityClassGenerator         entityGenerator,
+        EntityConfigurationGenerator configGenerator,
+        FileWriterService            fileWriter,
+        DbContextGenerator           dbContextGenerator,
+        IGenerationLogger            logger)
     {
         _entityGenerator    = entityGenerator;
+        _configGenerator    = configGenerator;
         _fileWriter         = fileWriter;
         _dbContextGenerator = dbContextGenerator;
         _logger             = logger;
@@ -31,22 +34,26 @@ public class CatalogueGenerationOrchestrator
 
     /// <summary>
     /// Runs the generation pipeline against the provided data source and writes
-    /// output files to <paramref name="outputDirectory"/>.
+    /// output files to the specified paths.
     /// </summary>
-    /// <param name="dataSource">
-    /// Configured data source (e.g. <c>CatalogueDbSchemaDataSource</c> with
-    /// <c>DatabaseId</c> set).
-    /// </param>
-    /// <param name="outputDirectory">Directory to write generated .cs files into.</param>
+    /// <param name="dataSource">Configured data source (e.g. <c>CatalogueDbSchemaDataSource</c>).</param>
+    /// <param name="sqlEntityAndConfigOutputDir">Folder for entity .cs files and SQL Server configuration files.</param>
+    /// <param name="sqlDbContextFilePath">Full path to the SQL Server DbContext .cs file to write.</param>
+    /// <param name="sqliteConfigOutputDir">Folder for SQLite configuration files.</param>
+    /// <param name="sqliteDbContextFilePath">Full path to the SQLite DbContext .cs file to write.</param>
     public async Task<GenerationResult> RunAsync(
         ISchemaDataSource dataSource,
-        string outputDirectory)
+        string sqlEntityAndConfigOutputDir,
+        string sqlDbContextFilePath,
+        string sqliteConfigOutputDir,
+        string sqliteDbContextFilePath)
     {
         var result = new GenerationResult { Success = true };
 
-        // Ensure a clean output directory
-        _fileWriter.CleanOutputDirectory(outputDirectory, force: true);
-        _fileWriter.EnsureOutputDirectoryExists(outputDirectory);
+        // Ensure clean output directories
+        _fileWriter.CleanOutputDirectory(sqlEntityAndConfigOutputDir, force: true);
+        _fileWriter.EnsureOutputDirectoryExists(sqlEntityAndConfigOutputDir);
+        _fileWriter.EnsureOutputDirectoryExists(sqliteConfigOutputDir);
 
         // ── Step 1: Load tables from data source ──────────────────────────────
         _logger.LogInfo("Loading tables from CatalogueDb...");
@@ -89,7 +96,7 @@ public class CatalogueGenerationOrchestrator
 
             var entityCode = _entityGenerator.GenerateEntityClass(table);
             if (_fileWriter.WriteEntityFile(
-                    outputDirectory, table.Server, table.Database, table.Schema, table.TableName, entityCode))
+                    sqlEntityAndConfigOutputDir, table.Server, table.Database, table.Schema, table.TableName, entityCode))
             {
                 result.EntitiesGenerated++;
                 generatedTables.Add(table);
@@ -109,7 +116,7 @@ public class CatalogueGenerationOrchestrator
         {
             var viewCode = _entityGenerator.GenerateViewClass(view);
             if (_fileWriter.WriteViewFile(
-                    outputDirectory, view.Server, view.Database, view.Schema, view.ViewName, viewCode))
+                    sqlEntityAndConfigOutputDir, view.Server, view.Database, view.Schema, view.ViewName, viewCode))
             {
                 result.ViewsGenerated++;
                 generatedViews.Add(view);
@@ -151,10 +158,21 @@ public class CatalogueGenerationOrchestrator
                 dbTables ??= new List<TableDefinition>();
                 dbViews  ??= new List<ViewDefinition>();
 
-                var configCode = _entityGenerator.GenerateCombinedConfiguration(server, database, dbTables, dbViews);
-                if (!_fileWriter.WriteConfigurationFile(outputDirectory, server, database, configCode))
+                var configCode = _configGenerator.GenerateCombinedSQLConfiguration(server, database, dbTables, dbViews);
+                if (!_fileWriter.WriteConfigurationFile(sqlEntityAndConfigOutputDir, server, database, configCode))
                 {
-                    var msg = $"Failed to write configuration: [{server}].[{database}]";
+                    var msg = $"Failed to write SQL configuration: [{server}].[{database}]";
+                    result.Errors.Add(msg);
+                    result.ErrorsEncountered++;
+                }
+
+                // ── Step 6b: Generate SQLite configuration ─────────────────────────
+                _logger.LogInfo(string.Empty);
+                _logger.LogInfo($"Generating SQLite configuration for [{server}].[{database}]...");
+                var sqliteConfigCode = _configGenerator.GenerateCombinedSQLiteConfiguration(server, database, dbTables, dbViews);
+                if (!_fileWriter.WriteSQLiteConfigurationFile(sqliteConfigOutputDir, server, database, sqliteConfigCode))
+                {
+                    var msg = $"Failed to write SQLite configuration: [{server}].[{database}]";
                     result.Errors.Add(msg);
                     result.ErrorsEncountered++;
                 }
@@ -166,9 +184,22 @@ public class CatalogueGenerationOrchestrator
             var dbContextCode = _dbContextGenerator.GenerateSQLDbContext(
                 generatedTables, generatedViews, serverDatabasePairs);
 
-            if (!_fileWriter.WriteDbContextFile(outputDirectory, dbContextCode))
+            if (!_fileWriter.WriteToPath(sqlDbContextFilePath, dbContextCode))
             {
                 var msg = "Failed to write SQLDbContext file";
+                result.Errors.Add(msg);
+                result.ErrorsEncountered++;
+            }
+
+            // ── Step 7b: Generate SQLiteDbContext ─────────────────────────────
+            _logger.LogInfo(string.Empty);
+            _logger.LogInfo("Generating SQLiteDbContext...");
+            var sqliteDbContextCode = _dbContextGenerator.GenerateSQLiteDbContext(
+                generatedTables, generatedViews, serverDatabasePairs);
+
+            if (!_fileWriter.WriteToPath(sqliteDbContextFilePath, sqliteDbContextCode))
+            {
+                var msg = "Failed to write SQLiteDbContext file";
                 result.Errors.Add(msg);
                 result.ErrorsEncountered++;
             }

@@ -13,30 +13,33 @@ namespace DacpacEntityGenerator.Core.Services;
 /// </summary>
 public class GenerationOrchestrator
 {
-    private readonly ExcelReaderService     _excelReader;
-    private readonly DacpacExtractorService _dacpacExtractor;
-    private readonly ModelXmlParserService  _modelXmlParser;
-    private readonly PrimaryKeyEnricher     _pkEnricher;
-    private readonly EntityClassGenerator   _entityGenerator;
-    private readonly FileWriterService      _fileWriter;
-    private readonly DbContextGenerator     _dbContextGenerator;
-    private readonly IGenerationLogger      _logger;
+    private readonly ExcelReaderService          _excelReader;
+    private readonly DacpacExtractorService      _dacpacExtractor;
+    private readonly ModelXmlParserService       _modelXmlParser;
+    private readonly PrimaryKeyEnricher          _pkEnricher;
+    private readonly EntityClassGenerator        _entityGenerator;
+    private readonly EntityConfigurationGenerator _configGenerator;
+    private readonly FileWriterService           _fileWriter;
+    private readonly DbContextGenerator          _dbContextGenerator;
+    private readonly IGenerationLogger           _logger;
 
     public GenerationOrchestrator(
-        ExcelReaderService     excelReader,
-        DacpacExtractorService dacpacExtractor,
-        ModelXmlParserService  modelXmlParser,
-        PrimaryKeyEnricher     pkEnricher,
-        EntityClassGenerator   entityGenerator,
-        FileWriterService      fileWriter,
-        DbContextGenerator     dbContextGenerator,
-        IGenerationLogger      logger)
+        ExcelReaderService           excelReader,
+        DacpacExtractorService       dacpacExtractor,
+        ModelXmlParserService        modelXmlParser,
+        PrimaryKeyEnricher           pkEnricher,
+        EntityClassGenerator         entityGenerator,
+        EntityConfigurationGenerator configGenerator,
+        FileWriterService            fileWriter,
+        DbContextGenerator           dbContextGenerator,
+        IGenerationLogger            logger)
     {
         _excelReader         = excelReader;
         _dacpacExtractor     = dacpacExtractor;
         _modelXmlParser      = modelXmlParser;
         _pkEnricher          = pkEnricher;
         _entityGenerator     = entityGenerator;
+        _configGenerator     = configGenerator;
         _fileWriter          = fileWriter;
         _dbContextGenerator  = dbContextGenerator;
         _logger              = logger;
@@ -44,15 +47,25 @@ public class GenerationOrchestrator
 
     /// <summary>
     /// Runs the full generation pipeline and returns a summary of what was produced.
-    /// The output directory is purged then re-populated; the input directory is read-only.
     /// </summary>
-    public GenerationResult Run(string inputDirectory, string outputDirectory)
+    /// <param name="inputDirectory">Directory containing the Excel file and DACPAC sub-folder.</param>
+    /// <param name="sqlEntityAndConfigOutputDir">Folder for entity .cs files and SQL Server configuration files.</param>
+    /// <param name="sqlDbContextFilePath">Full path to the SQL Server DbContext .cs file to write.</param>
+    /// <param name="sqliteConfigOutputDir">Folder for SQLite configuration files.</param>
+    /// <param name="sqliteDbContextFilePath">Full path to the SQLite DbContext .cs file to write.</param>
+    public GenerationResult Run(
+        string inputDirectory,
+        string sqlEntityAndConfigOutputDir,
+        string sqlDbContextFilePath,
+        string sqliteConfigOutputDir,
+        string sqliteDbContextFilePath)
     {
         var result = new GenerationResult { Success = true };
 
-        // Ensure a clean output directory
-        _fileWriter.CleanOutputDirectory(outputDirectory, force: true);
-        _fileWriter.EnsureOutputDirectoryExists(outputDirectory);
+        // Ensure a clean SQL entity/config output directory (input staging is separate)
+        _fileWriter.CleanOutputDirectory(sqlEntityAndConfigOutputDir, force: true);
+        _fileWriter.EnsureOutputDirectoryExists(sqlEntityAndConfigOutputDir);
+        _fileWriter.EnsureOutputDirectoryExists(sqliteConfigOutputDir);
 
         // ── Step 1: Locate Excel file ─────────────────────────────────────────
         var excelFilePath = _excelReader.FindExcelFile(inputDirectory);
@@ -138,7 +151,7 @@ public class GenerationOrchestrator
                 foreach (var view in views)
                 {
                     var viewCode = _entityGenerator.GenerateViewClass(view);
-                    if (_fileWriter.WriteViewFile(outputDirectory, server, database, view.Schema, view.ViewName, viewCode))
+                    if (_fileWriter.WriteViewFile(sqlEntityAndConfigOutputDir, server, database, view.Schema, view.ViewName, viewCode))
                     {
                         result.ViewsGenerated++;
                         allViews.Add(view);
@@ -192,7 +205,7 @@ public class GenerationOrchestrator
                     }
 
                     var entityCode = _entityGenerator.GenerateEntityClass(tableDefinition);
-                    if (_fileWriter.WriteEntityFile(outputDirectory, server, database, schema, tableName, entityCode))
+                    if (_fileWriter.WriteEntityFile(sqlEntityAndConfigOutputDir, server, database, schema, tableName, entityCode))
                     {
                         result.EntitiesGenerated++;
                     }
@@ -242,11 +255,21 @@ public class GenerationOrchestrator
                 tables ??= new List<TableDefinition>();
                 views  ??= new List<ViewDefinition>();
 
-                var configCode = _entityGenerator.GenerateCombinedConfiguration(server, database, tables, views);
+                var configCode = _configGenerator.GenerateCombinedSQLConfiguration(server, database, tables, views);
 
-                if (!_fileWriter.WriteConfigurationFile(outputDirectory, server, database, configCode))
+                if (!_fileWriter.WriteConfigurationFile(sqlEntityAndConfigOutputDir, server, database, configCode))
                 {
-                    var errorMsg = $"Failed to write configuration file: [{server}].[{database}]";
+                    var errorMsg = $"Failed to write SQL configuration file: [{server}].[{database}]";
+                    result.Errors.Add(errorMsg);
+                    result.ErrorsEncountered++;
+                }
+
+                // SQLite configuration
+                _logger.LogInfo($"[{server}].[{database}] - Generating SQLite configuration...");
+                var sqliteConfigCode = _configGenerator.GenerateCombinedSQLiteConfiguration(server, database, tables ?? new(), views ?? new());
+                if (!_fileWriter.WriteSQLiteConfigurationFile(sqliteConfigOutputDir, server, database, sqliteConfigCode))
+                {
+                    var errorMsg = $"Failed to write SQLite configuration file: [{server}].[{database}]";
                     result.Errors.Add(errorMsg);
                     result.ErrorsEncountered++;
                 }
@@ -256,9 +279,20 @@ public class GenerationOrchestrator
             _logger.LogInfo("");
             _logger.LogInfo("Generating SQLDbContext...");
             var dbContextCode = _dbContextGenerator.GenerateSQLDbContext(allTableDefinitions, allViews, serverDatabasePairs);
-            if (!_fileWriter.WriteDbContextFile(outputDirectory, dbContextCode))
+            if (!_fileWriter.WriteToPath(sqlDbContextFilePath, dbContextCode))
             {
                 var errorMsg = "Failed to write SQLDbContext file";
+                result.Errors.Add(errorMsg);
+                result.ErrorsEncountered++;
+            }
+
+            // ── Step 6b: Generate SQLiteDbContext ─────────────────────────────
+            _logger.LogInfo("");
+            _logger.LogInfo("Generating SQLiteDbContext...");
+            var sqliteDbContextCode = _dbContextGenerator.GenerateSQLiteDbContext(allTableDefinitions, allViews, serverDatabasePairs);
+            if (!_fileWriter.WriteToPath(sqliteDbContextFilePath, sqliteDbContextCode))
+            {
+                var errorMsg = "Failed to write SQLiteDbContext file";
                 result.Errors.Add(errorMsg);
                 result.ErrorsEncountered++;
             }
