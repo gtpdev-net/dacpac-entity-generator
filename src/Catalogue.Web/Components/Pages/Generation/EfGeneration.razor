@@ -57,7 +57,8 @@
                     <select class="form-select font-monospace"
                             @bind="_selectedDatabaseId"
                             disabled="@_running">
-                        <option value="0">-- select a database --</option>
+                        <option value="-1">All Servers / Databases</option>
+                        <option value="0" disabled>── or select a specific database ──</option>
                         @foreach (var db in _databases)
                         {
                             <option value="@db.DatabaseId">
@@ -260,7 +261,7 @@ else
 
     // ── Database-sourced inputs ───────────────────────────────────────────────
     private IReadOnlyList<SourceDatabaseInfo> _databases = Array.Empty<SourceDatabaseInfo>();
-    private int _selectedDatabaseId;
+    private int _selectedDatabaseId = -1;
 
     // ── Run state ─────────────────────────────────────────────────────────────
     private bool _running;
@@ -289,7 +290,7 @@ else
     // ── CanGenerate ───────────────────────────────────────────────────────────
     private bool CanGenerate => !_running && (
         _mode == GenMode.DatabaseSourced
-            ? _selectedDatabaseId > 0
+            ? _selectedDatabaseId != 0
               && !string.IsNullOrWhiteSpace(_entityOutputPath)
               && !string.IsNullOrWhiteSpace(_dbContextFilePath)
             : !string.IsNullOrWhiteSpace(_excelFilePath)

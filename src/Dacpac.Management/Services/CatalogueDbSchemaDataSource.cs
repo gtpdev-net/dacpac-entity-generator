@@ -32,14 +32,28 @@ public class CatalogueDbSchemaDataSource : ISchemaDataSource
         if (DatabaseId == 0)
             return new List<TableDefinition>();
 
-        var db = await _repo.GetDatabaseByIdAsync(DatabaseId);
+        if (DatabaseId < 0)
+        {
+            var allDbs  = await _repo.GetInScopeDatabasesAsync();
+            var results = new List<TableDefinition>();
+            foreach (var dbInfo in allDbs)
+                results.AddRange(await GetTablesForDatabaseAsync(dbInfo.DatabaseId));
+            return results;
+        }
+
+        return await GetTablesForDatabaseAsync(DatabaseId);
+    }
+
+    private async Task<List<TableDefinition>> GetTablesForDatabaseAsync(int databaseId)
+    {
+        var db = await _repo.GetDatabaseByIdAsync(databaseId);
         if (db == null)
             return new List<TableDefinition>();
 
         var serverName   = db.Source?.ServerName ?? string.Empty;
         var databaseName = db.DatabaseName;
 
-        var tableInfoList = await _repo.GetInScopeTablesAsync(DatabaseId);
+        var tableInfoList = await _repo.GetInScopeTablesAsync(databaseId);
         var result        = new List<TableDefinition>();
 
         foreach (var tableInfo in tableInfoList)
@@ -77,14 +91,28 @@ public class CatalogueDbSchemaDataSource : ISchemaDataSource
         if (DatabaseId == 0)
             return new List<ViewDefinition>();
 
-        var db = await _repo.GetDatabaseByIdAsync(DatabaseId);
+        if (DatabaseId < 0)
+        {
+            var allDbs  = await _repo.GetInScopeDatabasesAsync();
+            var results = new List<ViewDefinition>();
+            foreach (var dbInfo in allDbs)
+                results.AddRange(await GetViewsForDatabaseAsync(dbInfo.DatabaseId));
+            return results;
+        }
+
+        return await GetViewsForDatabaseAsync(DatabaseId);
+    }
+
+    private async Task<List<ViewDefinition>> GetViewsForDatabaseAsync(int databaseId)
+    {
+        var db = await _repo.GetDatabaseByIdAsync(databaseId);
         if (db == null)
             return new List<ViewDefinition>();
 
         var serverName   = db.Source?.ServerName ?? string.Empty;
         var databaseName = db.DatabaseName;
 
-        var viewSummaries = await _repo.GetViewsAsync(DatabaseId);
+        var viewSummaries = await _repo.GetViewsAsync(databaseId);
         var result        = new List<ViewDefinition>();
 
         foreach (var summary in viewSummaries)
@@ -127,7 +155,42 @@ public class CatalogueDbSchemaDataSource : ISchemaDataSource
         if (DatabaseId == 0)
             return new ElementDiscoveryReport();
 
-        var db = await _repo.GetDatabaseByIdAsync(DatabaseId);
+        if (DatabaseId < 0)
+        {
+            var allDbs   = await _repo.GetInScopeDatabasesAsync();
+            var allSps   = new List<ElementDetail>();
+            var allTrigs = new List<ElementDetail>();
+            var totalSps   = 0;
+            var totalFns   = 0;
+            var totalTrigs = 0;
+            foreach (var dbInfo in allDbs)
+            {
+                var dbReport = await GetDiscoveryForDatabaseAsync(dbInfo.DatabaseId);
+                allSps.AddRange(dbReport.StoredProcedures);
+                allTrigs.AddRange(dbReport.Triggers);
+                totalSps   += dbReport.ElementTypeCounts.GetValueOrDefault("StoredProcedure");
+                totalFns   += dbReport.ElementTypeCounts.GetValueOrDefault("Function");
+                totalTrigs += dbReport.ElementTypeCounts.GetValueOrDefault("Trigger");
+            }
+            return new ElementDiscoveryReport
+            {
+                StoredProcedures  = allSps,
+                Triggers          = allTrigs,
+                ElementTypeCounts = new Dictionary<string, int>
+                {
+                    ["StoredProcedure"] = totalSps,
+                    ["Function"]        = totalFns,
+                    ["Trigger"]         = totalTrigs,
+                },
+            };
+        }
+
+        return await GetDiscoveryForDatabaseAsync(DatabaseId);
+    }
+
+    private async Task<ElementDiscoveryReport> GetDiscoveryForDatabaseAsync(int databaseId)
+    {
+        var db = await _repo.GetDatabaseByIdAsync(databaseId);
         if (db == null)
             return new ElementDiscoveryReport();
 
@@ -136,7 +199,7 @@ public class CatalogueDbSchemaDataSource : ISchemaDataSource
         var location     = $"[{serverName}].[{databaseName}]";
 
         // Stored procedures
-        var storedProcs = await _repo.GetStoredProceduresAsync(DatabaseId);
+        var storedProcs = await _repo.GetStoredProceduresAsync(databaseId);
         var spDetails = storedProcs
             .Select(p => new ElementDetail
             {
@@ -148,11 +211,11 @@ public class CatalogueDbSchemaDataSource : ISchemaDataSource
             .ToList();
 
         // Functions
-        var functions = await _repo.GetFunctionsAsync(DatabaseId);
+        var functions = await _repo.GetFunctionsAsync(databaseId);
         // (functions are returned as ElementTypeCounts entry, not a dedicated list on the report)
 
         // Triggers (gathered from all tables)
-        var tableInfoList = await _repo.GetInScopeTablesAsync(DatabaseId);
+        var tableInfoList = await _repo.GetInScopeTablesAsync(databaseId);
         var triggerDetails = new List<ElementDetail>();
         foreach (var tableInfo in tableInfoList)
         {
