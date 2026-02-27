@@ -1,7 +1,6 @@
 using Catalogue.Core.DTOs;
 using Catalogue.Core.Interfaces;
 using Catalogue.Core.Models;
-using Catalogue.Core.Models.Schema;
 using Catalogue.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 

@@ -1,4 +1,4 @@
-namespace Catalogue.Core.Models.Schema;
+namespace Catalogue.Core.Models;
 
 public class SourceForeignKeyColumn
 {

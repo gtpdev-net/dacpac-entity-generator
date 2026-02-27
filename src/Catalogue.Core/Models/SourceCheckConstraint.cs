@@ -1,12 +1,11 @@
-namespace Catalogue.Core.Models.Schema;
+namespace Catalogue.Core.Models;
 
-public class SourceTrigger
+public class SourceCheckConstraint
 {
-    public int SourceTriggerId { get; set; }
+    public int SourceCheckConstraintId { get; set; }
     public int TableId { get; set; }
-    public string SchemaName { get; set; } = "dbo";
-    public string TriggerName { get; set; } = string.Empty;
-    public string? SqlBody { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Expression { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public string? CreatedBy { get; set; }

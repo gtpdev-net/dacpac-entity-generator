@@ -1,7 +1,6 @@
 using Catalogue.Core.Abstractions;
 using Catalogue.Core.Interfaces;
 using Catalogue.Core.Models;
-using Catalogue.Core.Models.Schema;
 using Dacpac.Management.Models;
 
 namespace Dacpac.Management.Services;
