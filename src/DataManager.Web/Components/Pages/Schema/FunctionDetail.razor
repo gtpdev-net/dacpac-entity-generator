@@ -1,0 +1,78 @@
+@page "/servers/{SourceId:int}/databases/{DatabaseId:int}/schema/functions/{FunctionId:int}"
+@rendermode InteractiveServer
+@inject IDataManagerRepository Repository
+@inject IConfiguration Configuration
+
+<PageTitle>Function &mdash; @Configuration["AppTitle"] Migration</PageTitle>
+
+<BreadcrumbNav Items="@_breadcrumbs" />
+
+@if (_loading)
+{
+    <div class="spinner-border" role="status"><span class="visually-hidden">Loading…</span></div>
+}
+else if (_function is null)
+{
+    <div class="alert alert-warning">Function not found.</div>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="mb-0">
+            <span class="text-muted fw-normal">[@_function.SchemaName].</span>[@_function.FunctionName]
+        </h1>
+        <span class="badge @(_function.IsActive ? "text-bg-success" : "text-bg-secondary") fs-6">
+            @(_function.IsActive ? "Active" : "Inactive")
+        </span>
+    </div>
+
+    <!-- Metadata -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <label class="form-label text-muted small">FUNCTION TYPE</label>
+            <div><span class="badge text-bg-info fs-6">@(_function.FunctionType ?? "—")</span></div>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label text-muted small">RETURN TYPE</label>
+            <div><code>@(_function.ReturnType ?? "—")</code></div>
+        </div>
+    </div>
+
+    <!-- SQL Body -->
+    <h4>SQL Body</h4>
+    <SqlCodeBlock SqlBody="@_function.SqlBody" />
+}
+
+@code {
+    [Parameter] public int SourceId { get; set; }
+    [Parameter] public int DatabaseId { get; set; }
+    [Parameter] public int FunctionId { get; set; }
+
+    private bool _loading = true;
+    private SourceFunctionDetail? _function;
+    private string _databaseName = string.Empty;
+    private string _serverName = string.Empty;
+    private IEnumerable<BreadcrumbItem> _breadcrumbs = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+
+        var db = await Repository.GetDatabaseByIdAsync(DatabaseId);
+        _databaseName = db?.DatabaseName ?? DatabaseId.ToString();
+        _serverName = db?.Source.ServerName ?? SourceId.ToString();
+
+        _function = await Repository.GetFunctionByIdAsync(FunctionId);
+
+        _breadcrumbs =
+        [
+            new BreadcrumbItem("Servers", "/servers"),
+            new BreadcrumbItem(_serverName, $"/servers/{SourceId}/databases"),
+            new BreadcrumbItem(_databaseName, $"/servers/{SourceId}/databases/{DatabaseId}/tables"),
+            new BreadcrumbItem("Schema", $"/servers/{SourceId}/databases/{DatabaseId}/schema"),
+            new BreadcrumbItem(_function is null ? "Function" : $"{_function.SchemaName}.{_function.FunctionName}", isActive: true)
+        ];
+
+        _loading = false;
+    }
+}

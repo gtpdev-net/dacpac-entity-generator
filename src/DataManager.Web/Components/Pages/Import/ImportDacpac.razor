@@ -1,0 +1,185 @@
+@page "/import/dacpac"
+@rendermode InteractiveServer
+@inject DacpacSchemaImportService SchemaImporter
+@inject BlazorGenerationLogger Logger
+@inject NotificationService Notify
+@inject IConfiguration Configuration
+@implements IDisposable
+
+<PageTitle>Import DACPAC &mdash; @Configuration["AppTitle"] Migration</PageTitle>
+
+<h1>Import DACPAC</h1>
+<p class="text-muted">
+    Upload a .dacpac file to import the full schema — tables, columns (with type metadata),
+    indexes, foreign keys, constraints, views, stored procedures, functions, and triggers —
+    into the DataManagerDb.
+</p>
+<div class="alert alert-info d-flex align-items-start gap-2 py-2" role="alert">
+    <span class="oi oi-info" aria-hidden="true"></span>
+    <div>
+        <strong>File naming requirement:</strong> The <code>.dacpac</code> file must be named using the pattern
+        <code>&lt;server-name&gt;_&lt;database-name&gt;.dacpac</code> (e.g. <code>MYSERVER_MyDatabase.dacpac</code>).
+        The server name and database name are derived automatically from the file name.
+    </div>
+</div>
+
+@if (_result is not null)
+{
+    <div class="alert @(_result.Success ? "alert-success" : "alert-danger") mb-4">
+        @if (_result.Success)
+        {
+            <strong>Import complete.</strong>
+        }
+        else
+        {
+            <strong>Import failed.</strong>
+        }
+        <div class="row g-2 mt-1">
+            <div class="col-auto"><span class="badge bg-secondary fs-6">Tables: @_result.TablesProcessed</span></div>
+            <div class="col-auto"><span class="badge bg-primary fs-6">Cols updated: @_result.ColumnsUpdated</span></div>
+            <div class="col-auto"><span class="badge bg-info text-dark fs-6">Cols created: @_result.ColumnsCreated</span></div>
+            <div class="col-auto"><span class="badge bg-success fs-6">Views: @_result.ViewsImported</span></div>
+            <div class="col-auto"><span class="badge bg-warning text-dark fs-6">Procs: @_result.StoredProceduresImported</span></div>
+            <div class="col-auto"><span class="badge bg-warning text-dark fs-6">Functions: @_result.FunctionsImported</span></div>
+            <div class="col-auto"><span class="badge bg-secondary fs-6">Indexes: @_result.IndexesImported</span></div>
+            <div class="col-auto"><span class="badge bg-secondary fs-6">Triggers: @_result.TriggersImported</span></div>
+        </div>
+        @foreach (var err in _result.Errors)
+        {
+            <div class="text-danger mt-1">@err</div>
+        }
+    </div>
+}
+
+<div class="row g-3" style="max-width:700px">
+    <div class="col-12">
+        <label class="form-label">DACPAC File</label>
+        <InputFile OnChange="LoadFile" accept=".dacpac" class="form-control" disabled="@_running" />
+    </div>
+    @if (_parseError is not null)
+    {
+        <div class="col-12">
+            <div class="alert alert-warning py-2 mb-0">@_parseError</div>
+        </div>
+    }
+    else if (_fileStream is not null)
+    {
+        <div class="col-12">
+            <div class="d-flex gap-4">
+                <div>
+                    <span class="text-muted small">Server</span><br />
+                    <strong>@_serverName</strong>
+                </div>
+                <div>
+                    <span class="text-muted small">Database</span><br />
+                    <strong>@_databaseName</strong>
+                </div>
+            </div>
+        </div>
+    }
+    <div class="col-12">
+        <button class="btn btn-primary" @onclick="RunImport" disabled="@(!CanImport)">
+            @if (_running)
+            {
+                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                <span>Importing&hellip;</span>
+            }
+            else
+            {
+                <span>&#8599; Import Schema</span>
+            }
+        </button>
+    </div>
+</div>
+
+@if (_logLines.Count > 0 || _running)
+{
+    <ProgressLog Lines="_logLines" Running="_running"
+                 OnClear="() => _logLines.Clear()" MaxHeight="300px" />
+}
+
+@code {
+    private string _serverName   = string.Empty;
+    private string _databaseName = string.Empty;
+    private string? _parseError;
+    private MemoryStream? _fileStream;
+    private string? _fileName;
+    private bool _running;
+    private DacpacImportResult? _result;
+    private readonly List<ProgressLog.LogEntry> _logLines = new();
+
+    private bool CanImport =>
+        _fileStream is not null &&
+        !_running &&
+        _parseError is null &&
+        !string.IsNullOrWhiteSpace(_serverName);
+
+    protected override void OnInitialized() => Logger.OnLog += HandleLog;
+
+    private async Task LoadFile(InputFileChangeEventArgs e)
+    {
+        _fileStream  = null;
+        _parseError  = null;
+        _serverName  = string.Empty;
+        _databaseName = string.Empty;
+
+        var fileNameWithoutExt = Path.GetFileNameWithoutExtension(e.File.Name);
+        var separatorIndex = fileNameWithoutExt.IndexOf('_');
+
+        if (separatorIndex <= 0)
+        {
+            _parseError = $"'{e.File.Name}' does not match the required naming pattern <server-name>_<database-name>.dacpac. Please rename the file and try again.";
+            return;
+        }
+
+        _serverName   = fileNameWithoutExt[..separatorIndex];
+        _databaseName = fileNameWithoutExt[(separatorIndex + 1)..];
+        _fileName     = e.File.Name;
+
+        _fileStream = new MemoryStream();
+        await e.File.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024).CopyToAsync(_fileStream);
+        _fileStream.Position = 0;
+    }
+
+    private async Task RunImport()
+    {
+        if (!CanImport || _fileStream is null) return;
+
+        _result = null;
+        _logLines.Clear();
+        _running = true;
+        StateHasChanged();
+
+        try
+        {
+            _fileStream.Position = 0;
+            _result = await Task.Run(() =>
+                SchemaImporter.ImportSingleDacpacAsync(_fileStream, _serverName.Trim(), _databaseName.Trim()));
+
+            if (_result.Success)
+                Notify.Success($"Schema imported for {_serverName} \\ {_databaseName}.");
+            else
+                Notify.Error("Import finished with errors — see details above.");
+        }
+        catch (Exception ex)
+        {
+            Notify.Error($"Unexpected error: {ex.Message}");
+        }
+        finally
+        {
+            _running = false;
+            StateHasChanged();
+        }
+    }
+
+    private void HandleLog(string level, string message)
+    {
+        InvokeAsync(() =>
+        {
+            _logLines.Add(new ProgressLog.LogEntry(level, message));
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose() => Logger.OnLog -= HandleLog;
+}

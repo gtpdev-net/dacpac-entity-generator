@@ -1,0 +1,79 @@
+@page "/servers/{SourceId:int}/databases/{DatabaseId:int}/tables/{TableId:int}/triggers/{TriggerId:int}"
+@rendermode InteractiveServer
+@inject IDataManagerRepository Repository
+@inject IConfiguration Configuration
+
+<PageTitle>Trigger &mdash; @Configuration["AppTitle"] Migration</PageTitle>
+
+<BreadcrumbNav Items="@_breadcrumbs" />
+
+@if (_loading)
+{
+    <div class="spinner-border" role="status"><span class="visually-hidden">Loading…</span></div>
+}
+else if (_trigger is null)
+{
+    <div class="alert alert-warning">Trigger not found.</div>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="mb-0">
+            <span class="text-muted fw-normal">[@_trigger.SchemaName].</span>[@_trigger.TriggerName]
+        </h1>
+        <span class="badge @(_trigger.IsActive ? "text-bg-success" : "text-bg-secondary") fs-6">
+            @(_trigger.IsActive ? "Active" : "Inactive")
+        </span>
+    </div>
+
+    <div class="mb-3">
+        <span class="text-muted small me-2">Parent Table:</span>
+        <a href="/servers/@SourceId/databases/@DatabaseId/tables/@TableId/edit">
+            @_tableName
+        </a>
+    </div>
+
+    <h4>SQL Body</h4>
+    <SqlCodeBlock SqlBody="@_trigger.SqlBody" />
+}
+
+@code {
+    [Parameter] public int SourceId { get; set; }
+    [Parameter] public int DatabaseId { get; set; }
+    [Parameter] public int TableId { get; set; }
+    [Parameter] public int TriggerId { get; set; }
+
+    private bool _loading = true;
+    private SourceTriggerDetail? _trigger;
+    private string _tableName = string.Empty;
+    private string _databaseName = string.Empty;
+    private string _serverName = string.Empty;
+    private IEnumerable<BreadcrumbItem> _breadcrumbs = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+
+        var db       = await Repository.GetDatabaseByIdAsync(DatabaseId);
+        var table    = await Repository.GetTableByIdAsync(TableId);
+        var triggers = await Repository.GetTriggerDetailsAsync(TableId);
+
+        _databaseName = db?.DatabaseName ?? DatabaseId.ToString();
+        _serverName   = db?.Source.ServerName ?? SourceId.ToString();
+        _tableName    = table is null ? TableId.ToString()
+                        : $"[{table.SchemaName}].[{table.TableName}]";
+
+        _trigger = triggers.FirstOrDefault(t => t.SourceTriggerId == TriggerId);
+
+        _breadcrumbs =
+        [
+            new BreadcrumbItem("Servers", "/servers"),
+            new BreadcrumbItem(_serverName, $"/servers/{SourceId}/databases"),
+            new BreadcrumbItem(_databaseName, $"/servers/{SourceId}/databases/{DatabaseId}/tables"),
+            new BreadcrumbItem(_tableName, $"/servers/{SourceId}/databases/{DatabaseId}/tables/{TableId}/edit"),
+            new BreadcrumbItem(_trigger is null ? "Trigger" : _trigger.TriggerName, isActive: true)
+        ];
+
+        _loading = false;
+    }
+}

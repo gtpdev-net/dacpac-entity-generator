@@ -1,0 +1,101 @@
+@page "/servers/{SourceId:int}/databases/{DatabaseId:int}/schema/storedprocedures/{ProcedureId:int}"
+@rendermode InteractiveServer
+@inject IDataManagerRepository Repository
+@inject IConfiguration Configuration
+
+<PageTitle>Stored Procedure &mdash; @Configuration["AppTitle"] Migration</PageTitle>
+
+<BreadcrumbNav Items="@_breadcrumbs" />
+
+@if (_loading)
+{
+    <div class="spinner-border" role="status"><span class="visually-hidden">Loading…</span></div>
+}
+else if (_proc is null)
+{
+    <div class="alert alert-warning">Stored procedure not found.</div>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="mb-0">
+            <span class="text-muted fw-normal">[@_proc.SchemaName].</span>[@_proc.ProcedureName]
+        </h1>
+        <span class="badge @(_proc.IsActive ? "text-bg-success" : "text-bg-secondary") fs-6">
+            @(_proc.IsActive ? "Active" : "Inactive")
+        </span>
+    </div>
+
+    <!-- Parameters -->
+    <h4 class="mt-3">
+        Parameters
+        <span class="badge text-bg-secondary ms-2">@_proc.Parameters.Count</span>
+    </h4>
+
+    @if (_proc.Parameters.Count == 0)
+    {
+        <p class="text-muted">No parameters.</p>
+    }
+    else
+    {
+        <table class="table table-sm table-bordered table-hover align-middle mb-4">
+            <thead class="table-light">
+                <tr>
+                    <th>Name</th>
+                    <th>SQL Type</th>
+                    <th style="width:90px">Output</th>
+                    <th>Default Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in _proc.Parameters)
+                {
+                    <tr>
+                        <td><code>@p.Name</code></td>
+                        <td>@p.SqlType</td>
+                        <td><FlagBadge Value="@p.IsOutput" /></td>
+                        <td>@p.DefaultValue</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <!-- SQL Body -->
+    <h4>SQL Body</h4>
+    <SqlCodeBlock SqlBody="@_proc.SqlBody" />
+}
+
+@code {
+    [Parameter] public int SourceId { get; set; }
+    [Parameter] public int DatabaseId { get; set; }
+    [Parameter] public int ProcedureId { get; set; }
+
+    private bool _loading = true;
+    private SourceStoredProcedureDetail? _proc;
+    private string _databaseName = string.Empty;
+    private string _serverName = string.Empty;
+    private IEnumerable<BreadcrumbItem> _breadcrumbs = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+
+        var db = await Repository.GetDatabaseByIdAsync(DatabaseId);
+        _databaseName = db?.DatabaseName ?? DatabaseId.ToString();
+        _serverName = db?.Source.ServerName ?? SourceId.ToString();
+
+        _proc = await Repository.GetStoredProcedureByIdAsync(ProcedureId);
+
+        _breadcrumbs =
+        [
+            new BreadcrumbItem("Servers", "/servers"),
+            new BreadcrumbItem(_serverName, $"/servers/{SourceId}/databases"),
+            new BreadcrumbItem(_databaseName, $"/servers/{SourceId}/databases/{DatabaseId}/tables"),
+            new BreadcrumbItem("Schema", $"/servers/{SourceId}/databases/{DatabaseId}/schema"),
+            new BreadcrumbItem(_proc is null ? "Stored Procedure" : $"{_proc.SchemaName}.{_proc.ProcedureName}", isActive: true)
+        ];
+
+        _loading = false;
+    }
+}
