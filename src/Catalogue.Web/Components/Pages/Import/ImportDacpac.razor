@@ -16,6 +16,14 @@
     indexes, foreign keys, constraints, views, stored procedures, functions, and triggers —
     into the CatalogueDb.
 </p>
+<div class="alert alert-info d-flex align-items-start gap-2 py-2" role="alert">
+    <span class="oi oi-info" aria-hidden="true"></span>
+    <div>
+        <strong>File naming requirement:</strong> The <code>.dacpac</code> file must be named using the pattern
+        <code>&lt;server-name&gt;_&lt;database-name&gt;.dacpac</code> (e.g. <code>MYSERVER_MyDatabase.dacpac</code>).
+        The server name and database name are derived automatically from the file name.
+    </div>
+</div>
 
 @if (_result is not null)
 {
@@ -50,15 +58,27 @@
         <label class="form-label">DACPAC File</label>
         <InputFile OnChange="LoadFile" accept=".dacpac" class="form-control" disabled="@_running" />
     </div>
-    <div class="col-md-6">
-        <label class="form-label">Server Name</label>
-        <input class="form-control" @bind="_serverName" placeholder="e.g. MYSERVER" disabled="@_running" />
-    </div>
-    <div class="col-md-6">
-        <label class="form-label">Database Name</label>
-        <input class="form-control" @bind="_databaseName" placeholder="e.g. MyDatabase" disabled="@_running" />
-        <div class="form-text">Leave blank to infer from file name.</div>
-    </div>
+    @if (_parseError is not null)
+    {
+        <div class="col-12">
+            <div class="alert alert-warning py-2 mb-0">@_parseError</div>
+        </div>
+    }
+    else if (_fileStream is not null)
+    {
+        <div class="col-12">
+            <div class="d-flex gap-4">
+                <div>
+                    <span class="text-muted small">Server</span><br />
+                    <strong>@_serverName</strong>
+                </div>
+                <div>
+                    <span class="text-muted small">Database</span><br />
+                    <strong>@_databaseName</strong>
+                </div>
+            </div>
+        </div>
+    }
     <div class="col-12">
         <button class="btn btn-primary" @onclick="RunImport" disabled="@(!CanImport)">
             @if (_running)
@@ -99,26 +119,44 @@
 @code {
     private string _serverName   = string.Empty;
     private string _databaseName = string.Empty;
+    private string? _parseError;
     private MemoryStream? _fileStream;
     private string? _fileName;
     private bool _running;
     private DacpacImportResult? _result;
     private readonly List<(string Level, string Message)> _logLines = new();
 
-    private bool CanImport => _fileStream is not null && !_running && !string.IsNullOrWhiteSpace(_serverName);
+    private bool CanImport =>
+        _fileStream is not null &&
+        !_running &&
+        _parseError is null &&
+        !string.IsNullOrWhiteSpace(_serverName);
 
     protected override void OnInitialized() => Logger.OnLog += HandleLog;
 
     private async Task LoadFile(InputFileChangeEventArgs e)
     {
+        _fileStream  = null;
+        _parseError  = null;
+        _serverName  = string.Empty;
+        _databaseName = string.Empty;
+
+        var fileNameWithoutExt = Path.GetFileNameWithoutExtension(e.File.Name);
+        var separatorIndex = fileNameWithoutExt.IndexOf('_');
+
+        if (separatorIndex <= 0)
+        {
+            _parseError = $"'{e.File.Name}' does not match the required naming pattern <server-name>_<database-name>.dacpac. Please rename the file and try again.";
+            return;
+        }
+
+        _serverName   = fileNameWithoutExt[..separatorIndex];
+        _databaseName = fileNameWithoutExt[(separatorIndex + 1)..];
+        _fileName     = e.File.Name;
+
         _fileStream = new MemoryStream();
         await e.File.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024).CopyToAsync(_fileStream);
         _fileStream.Position = 0;
-        _fileName = e.File.Name;
-
-        // Pre-fill database name from file name if blank
-        if (string.IsNullOrWhiteSpace(_databaseName))
-            _databaseName = Path.GetFileNameWithoutExtension(e.File.Name);
     }
 
     private async Task RunImport()
@@ -137,7 +175,7 @@
                 SchemaImporter.ImportSingleDacpacAsync(_fileStream, _serverName.Trim(), _databaseName.Trim()));
 
             if (_result.Success)
-                Notify.Success($"Schema imported for {_databaseName}.");
+                Notify.Success($"Schema imported for {_serverName} \\ {_databaseName}.");
             else
                 Notify.Error("Import finished with errors — see details above.");
         }

@@ -33,10 +33,10 @@ public class DacpacSchemaImportService
 
     /// <summary>
     /// Enumerates all .dacpac files in <paramref name="folderPath"/> and imports each one.
-    /// The database name is inferred from the file name.
+    /// Each file must follow the naming convention <c>&lt;server-name&gt;_&lt;database-name&gt;.dacpac</c>;
+    /// the server name and database name are parsed from the file name by splitting on the first underscore.
     /// </summary>
-    public async Task<IReadOnlyList<DacpacImportResult>> ImportDacpacFolderAsync(
-        string folderPath, string serverName)
+    public async Task<IReadOnlyList<DacpacImportResult>> ImportDacpacFolderAsync(string folderPath)
     {
         var results = new List<DacpacImportResult>();
 
@@ -58,7 +58,26 @@ public class DacpacSchemaImportService
 
         foreach (var dacpacPath in dacpacFiles)
         {
-            var databaseName = Path.GetFileNameWithoutExtension(dacpacPath);
+            var fileNameWithoutExt = Path.GetFileNameWithoutExtension(dacpacPath);
+            var separatorIndex = fileNameWithoutExt.IndexOf('_');
+
+            if (separatorIndex <= 0)
+            {
+                _logger.LogError(
+                    $"Skipping '{Path.GetFileName(dacpacPath)}': file name does not match the required pattern <server-name>_<database-name>.dacpac");
+                results.Add(new DacpacImportResult
+                {
+                    DatabaseName = fileNameWithoutExt,
+                    ServerName   = string.Empty,
+                    Success      = false,
+                    Errors       = { "File name does not match the required pattern <server-name>_<database-name>.dacpac" }
+                });
+                continue;
+            }
+
+            var serverName   = fileNameWithoutExt[..separatorIndex];
+            var databaseName = fileNameWithoutExt[(separatorIndex + 1)..];
+
             _logger.LogProgress($"Importing: {Path.GetFileName(dacpacPath)} → {serverName}/{databaseName}");
 
             try
@@ -73,9 +92,9 @@ public class DacpacSchemaImportService
                 results.Add(new DacpacImportResult
                 {
                     DatabaseName = databaseName,
-                    ServerName = serverName,
-                    Success = false,
-                    Errors = { ex.Message }
+                    ServerName   = serverName,
+                    Success      = false,
+                    Errors       = { ex.Message }
                 });
             }
         }

@@ -13,10 +13,17 @@
 <h1>Import DACPAC Folder</h1>
 <p class="text-muted">
     Point to a folder containing one or more <code>.dacpac</code> files. Each file is imported
-    as a separate database under the specified server name, with full schema detail — tables,
-    columns (with type metadata), indexes, foreign keys, constraints, views, stored procedures,
-    functions, and triggers.
+    as a separate database with full schema detail — tables, columns (with type metadata),
+    indexes, foreign keys, constraints, views, stored procedures, functions, and triggers.
 </p>
+<div class="alert alert-info d-flex align-items-start gap-2 py-2" role="alert">
+    <span class="oi oi-info" aria-hidden="true"></span>
+    <div>
+        <strong>File naming requirement:</strong> Each <code>.dacpac</code> file must be named using the pattern
+        <code>&lt;server-name&gt;_&lt;database-name&gt;.dacpac</code> (e.g. <code>MYSERVER_MyDatabase.dacpac</code>).
+        The server name and database name are derived automatically from the file name — no manual entry is required.
+    </div>
+</div>
 
 @if (_results.Count > 0)
 {
@@ -53,13 +60,6 @@
                placeholder='e.g. C:\Dacpacs or /home/user/dacpacs'
                disabled="@_running" />
         <div class="form-text">All <code>.dacpac</code> files in this folder will be imported.</div>
-    </div>
-    <div class="col-md-6">
-        <label class="form-label">Server Name</label>
-        <input class="form-control" @bind="_serverName"
-               placeholder="e.g. MYSERVER\INSTANCE"
-               disabled="@_running" />
-        <div class="form-text">Used for the server lookup / creation in CatalogueDb.</div>
     </div>
     <div class="col-12">
         <button class="btn btn-primary" @onclick="RunImport" disabled="@(!CanImport)">
@@ -100,15 +100,13 @@
 
 @code {
     private string _folderPath = string.Empty;
-    private string _serverName = string.Empty;
     private bool _running;
     private readonly List<DacpacImportResult> _results = new();
     private readonly List<(string Level, string Message)> _logLines = new();
 
     private bool CanImport =>
         !_running &&
-        !string.IsNullOrWhiteSpace(_folderPath) &&
-        !string.IsNullOrWhiteSpace(_serverName);
+        !string.IsNullOrWhiteSpace(_folderPath);
 
     protected override void OnInitialized() => Logger.OnLog += HandleLog;
 
@@ -124,7 +122,7 @@
         try
         {
             var folderResults = await Task.Run(() =>
-                SchemaImporter.ImportDacpacFolderAsync(_folderPath.Trim(), _serverName.Trim()));
+                SchemaImporter.ImportDacpacFolderAsync(_folderPath.Trim()));
 
             _results.AddRange(folderResults);
 
