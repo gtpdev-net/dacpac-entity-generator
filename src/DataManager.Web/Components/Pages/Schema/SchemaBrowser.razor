@@ -2,6 +2,7 @@
 @page "/schema-browser/{*Path}"
 @rendermode InteractiveServer
 @inject NavigationManager NavManager
+@inject IJSRuntime JS
 @inject IConfiguration Configuration
 
 <PageTitle>Schema Browser &mdash; @Configuration["AppTitle"]</PageTitle>
@@ -44,14 +45,19 @@
         }
     }
 
-    private Task HandleNodeSelected(TreeNode node)
+    private async Task HandleNodeSelected(TreeNode node)
     {
         _selectedNode = node;
         UpdateBreadcrumbs();
         var urlPath = BuildPath(node);
         if (!string.IsNullOrEmpty(urlPath))
-            NavManager.NavigateTo($"/schema-browser/{urlPath}", replace: true);
-        return Task.CompletedTask;
+        {
+            // Use history.replaceState instead of NavigateTo so the URL is updated
+            // in the browser address bar without triggering Blazor's router.  A full
+            // NavigateTo changes the matched @page route template, which causes the
+            // component to be remounted and all tree expand-state to be lost.
+            await JS.InvokeVoidAsync("history.replaceState", null!, "", $"/schema-browser/{urlPath}");
+        }
     }
 
     private void UpdateBreadcrumbs()
