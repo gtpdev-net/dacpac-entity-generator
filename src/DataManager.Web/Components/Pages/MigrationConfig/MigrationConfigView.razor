@@ -1,0 +1,358 @@
+@page "/migration-config"
+@rendermode InteractiveServer
+@inject IDataManagerRepository Repository
+@inject MigrationConfigLoadService LoadService
+@inject NavigationManager Nav
+@inject IConfiguration Configuration
+
+<PageTitle>ADF Pipeline Config &mdash; @Configuration["AppTitle"]</PageTitle>
+
+<h1 class="mb-3">ADF Pipeline Config</h1>
+
+<!-- Filter bar -->
+<div class="card mb-3">
+    <div class="card-header fw-semibold">Filtration and Sorting</div>
+    <div class="card-body">
+        <div class="row g-2">
+            <div class="col-md-2">
+                <MultiSelectFilterDropdown Label="Source Server"
+                    AvailableOptions="AvailableSourceServers"
+                    SelectedValues="_selectedSourceServers"
+                    SelectedValuesChanged="v => { _selectedSourceServers = v; _page = 1; }" />
+            </div>
+            <div class="col-md-2">
+                <MultiSelectFilterDropdown Label="Source Database"
+                    AvailableOptions="AvailableSourceDatabases"
+                    SelectedValues="_selectedSourceDatabases"
+                    SelectedValuesChanged="v => { _selectedSourceDatabases = v; _page = 1; }" />
+            </div>
+            <div class="col-md-2">
+                <MultiSelectFilterDropdown Label="Source Schema"
+                    AvailableOptions="AvailableSourceSchemas"
+                    SelectedValues="_selectedSourceSchemas"
+                    SelectedValuesChanged="v => { _selectedSourceSchemas = v; _page = 1; }" />
+            </div>
+            <div class="col-md-2">
+                <MultiSelectFilterDropdown Label="Source Table"
+                    AvailableOptions="AvailableSourceTables"
+                    SelectedValues="_selectedSourceTables"
+                    SelectedValuesChanged="v => { _selectedSourceTables = v; _page = 1; }" />
+            </div>
+            <div class="col-md-2">
+                <MultiSelectFilterDropdown Label="Destination Schema"
+                    AvailableOptions="AvailableDestSchemas"
+                    SelectedValues="_selectedDestSchemas"
+                    SelectedValuesChanged="v => { _selectedDestSchemas = v; _page = 1; }" />
+            </div>
+            <div class="col-md-2">
+                <MultiSelectFilterDropdown Label="Active"
+                    AvailableOptions="@(new List<string> { "Yes", "No" })"
+                    SelectedValues="_selectedActive"
+                    SelectedValuesChanged="v => { _selectedActive = v; _page = 1; }" />
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toolbar -->
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <span class="text-muted small">@Filtered.Count rows</span>
+    <button class="btn btn-sm btn-primary" @onclick="RunLoad" disabled="@_loading">
+        @if (_loading)
+        {
+            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+        }
+        &#9654; Load / Refresh
+    </button>
+</div>
+
+@if (_loadResult is not null)
+{
+    <div class="alert alert-info alert-dismissible fade show py-2 mb-2" role="alert">
+        Load complete — <strong>@_loadResult.Inserted</strong> inserted,
+        <strong>@_loadResult.Updated</strong> updated,
+        <strong>@_loadResult.Unchanged</strong> unchanged
+        (evaluated <strong>@_loadResult.TotalTablesEvaluated</strong> tables).
+        <button type="button" class="btn-close" @onclick="() => _loadResult = null"></button>
+    </div>
+}
+
+@if (_all is null)
+{
+    <div class="spinner-border" role="status"></div>
+}
+else
+{
+    <div style="max-height: 65vh; overflow-y: auto;">
+        <table class="table table-hover table-sm align-middle">
+            <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
+                <tr>
+                    <th @onclick='() => Sort("srcserver")' style="cursor:pointer">
+                        Src Server @SortIndicator("srcserver")
+                    </th>
+                    <th @onclick='() => Sort("srcdatabase")' style="cursor:pointer">
+                        Src Database @SortIndicator("srcdatabase")
+                    </th>
+                    <th @onclick='() => Sort("srcschema")' style="cursor:pointer">
+                        Src Schema @SortIndicator("srcschema")
+                    </th>
+                    <th @onclick='() => Sort("srctable")' style="cursor:pointer">
+                        Src Table @SortIndicator("srctable")
+                    </th>
+                    <th>Dest. Server</th>
+                    <th>Dest. Database</th>
+                    <th @onclick='() => Sort("destschema")' style="cursor:pointer">
+                        Dest. Schema @SortIndicator("destschema")
+                    </th>
+                    <th @onclick='() => Sort("desttable")' style="cursor:pointer">
+                        Dest. Table @SortIndicator("desttable")
+                    </th>
+                    <th>Columns</th>
+                    <th>Filter Condition</th>
+                    <th>Active</th>
+                    <th>Modified</th>
+                </tr>
+            </thead>
+            <tbody style="font-family: Consolas, 'Courier New', monospace;">
+                @foreach (var row in Paged)
+                {
+                    <tr>
+                        <td class="small">@row.SourceServer</td>
+                        <td class="small">@row.SourceDatabase</td>
+                        <td class="small">@row.SourceSchema</td>
+                        <td class="small">@row.SourceTableName</td>
+                        <td>
+                            <input type="text" class="form-control form-control-sm"
+                                   style="min-width:130px"
+                                   value="@row.DestinationServer"
+                                   @onchange="async e => await SaveTextField(row, r => r.DestinationServer = e.Value?.ToString(), e.Value?.ToString())" />
+                        </td>
+                        <td>
+                            <input type="text" class="form-control form-control-sm"
+                                   style="min-width:130px"
+                                   value="@row.DestinationDatabase"
+                                   @onchange="async e => await SaveTextField(row, r => r.DestinationDatabase = e.Value?.ToString(), e.Value?.ToString())" />
+                        </td>
+                        <td class="small">@row.DestinationSchema</td>
+                        <td class="small">@row.DestinationTable</td>
+                        <td class="small">
+                            @if (row.ColumnList.Length <= 60)
+                            {
+                                <span>@row.ColumnList</span>
+                            }
+                            else
+                            {
+                                <span title="@row.ColumnList" style="cursor:help">
+                                    @(row.ColumnList[..57])&hellip;
+                                </span>
+                            }
+                        </td>
+                        <td>
+                            <input type="text" class="form-control form-control-sm"
+                                   style="min-width:130px"
+                                   value="@row.FilterCondition"
+                                   @onchange="async e => await SaveTextField(row, r => r.FilterCondition = e.Value?.ToString(), e.Value?.ToString())" />
+                        </td>
+                        <td class="text-center">
+                            <input type="checkbox" checked="@row.IsActive"
+                                   @onchange="async () => await ToggleIsActive(row)" />
+                        </td>
+                        <td class="small text-muted">@row.ModifiedAt?.ToString("dd MMM yy")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="d-flex justify-content-between align-items-center mt-2">
+        <span class="text-muted small">Page @_page of @(TotalPages == 0 ? 1 : TotalPages)</span>
+        <nav aria-label="Table pagination">
+            <ul class="pagination pagination-sm mb-0">
+                <li class="page-item @(_page == 1 ? "disabled" : "")">
+                    <button class="page-link" @onclick="() => _page--">&laquo;</button>
+                </li>
+                @for (int p = Math.Max(1, _page - 3); p <= Math.Min(TotalPages, _page + 3); p++)
+                {
+                    var lp = p;
+                    <li class="page-item @(_page == lp ? "active" : "")">
+                        <button class="page-link" @onclick="() => _page = lp">@lp</button>
+                    </li>
+                }
+                <li class="page-item @(_page == TotalPages || TotalPages == 0 ? "disabled" : "")">
+                    <button class="page-link" @onclick="() => _page++">&raquo;</button>
+                </li>
+            </ul>
+        </nav>
+    </div>
+}
+
+@code {
+    private List<MigrationConfigInfo>? _all;
+    private bool _loading;
+    private MigrationConfigLoadResult? _loadResult;
+
+    private HashSet<string> _selectedSourceServers   = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> _selectedSourceDatabases = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> _selectedSourceSchemas   = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> _selectedSourceTables    = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> _selectedDestSchemas     = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> _selectedActive          = new(StringComparer.OrdinalIgnoreCase);
+
+    private string _sortBy  = "srcdatabase";
+    private bool   _sortAsc = true;
+    private int    _page    = 1;
+    private const int PageSize = 50;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        var items = await Repository.GetMigrationConfigsAsync(includeInactive: true);
+        _all = items.ToList();
+    }
+
+    // ── Available options (cascade: each field excludes its own filter) ──────
+    private IReadOnlyList<string> AvailableSourceServers =>
+        GetFilteredExcluding("srcserver").Select(r => r.SourceServer)
+            .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
+
+    private IReadOnlyList<string> AvailableSourceDatabases =>
+        GetFilteredExcluding("srcdatabase").Select(r => r.SourceDatabase)
+            .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
+
+    private IReadOnlyList<string> AvailableSourceSchemas =>
+        GetFilteredExcluding("srcschema").Select(r => r.SourceSchema)
+            .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
+
+    private IReadOnlyList<string> AvailableSourceTables =>
+        GetFilteredExcluding("srctable").Select(r => r.SourceTableName)
+            .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
+
+    private IReadOnlyList<string> AvailableDestSchemas =>
+        GetFilteredExcluding("destschema").Select(r => r.DestinationSchema)
+            .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
+
+    private IEnumerable<MigrationConfigInfo> GetFilteredExcluding(string excludeField)
+    {
+        if (_all is null) return [];
+        var q = _all.AsEnumerable();
+        if (excludeField != "srcserver"   && _selectedSourceServers.Count > 0)
+            q = q.Where(r => _selectedSourceServers.Contains(r.SourceServer));
+        if (excludeField != "srcdatabase" && _selectedSourceDatabases.Count > 0)
+            q = q.Where(r => _selectedSourceDatabases.Contains(r.SourceDatabase));
+        if (excludeField != "srcschema"   && _selectedSourceSchemas.Count > 0)
+            q = q.Where(r => _selectedSourceSchemas.Contains(r.SourceSchema));
+        if (excludeField != "srctable"    && _selectedSourceTables.Count > 0)
+            q = q.Where(r => _selectedSourceTables.Contains(r.SourceTableName));
+        if (excludeField != "destschema"  && _selectedDestSchemas.Count > 0)
+            q = q.Where(r => _selectedDestSchemas.Contains(r.DestinationSchema));
+        if (excludeField != "active"      && _selectedActive.Count > 0)
+            q = q.Where(r => _selectedActive.Contains(r.IsActive ? "Yes" : "No"));
+        return q;
+    }
+
+    private List<MigrationConfigInfo> Filtered
+    {
+        get
+        {
+            if (_all is null) return [];
+            var q = _all.AsEnumerable();
+            if (_selectedSourceServers.Count > 0)
+                q = q.Where(r => _selectedSourceServers.Contains(r.SourceServer));
+            if (_selectedSourceDatabases.Count > 0)
+                q = q.Where(r => _selectedSourceDatabases.Contains(r.SourceDatabase));
+            if (_selectedSourceSchemas.Count > 0)
+                q = q.Where(r => _selectedSourceSchemas.Contains(r.SourceSchema));
+            if (_selectedSourceTables.Count > 0)
+                q = q.Where(r => _selectedSourceTables.Contains(r.SourceTableName));
+            if (_selectedDestSchemas.Count > 0)
+                q = q.Where(r => _selectedDestSchemas.Contains(r.DestinationSchema));
+            if (_selectedActive.Count > 0)
+                q = q.Where(r => _selectedActive.Contains(r.IsActive ? "Yes" : "No"));
+            return ApplySort(q.ToList());
+        }
+    }
+
+    private List<MigrationConfigInfo> Paged =>
+        Filtered.Skip((_page - 1) * PageSize).Take(PageSize).ToList();
+
+    private int TotalPages => (int)Math.Ceiling(Filtered.Count / (double)PageSize);
+
+    private List<MigrationConfigInfo> ApplySort(List<MigrationConfigInfo> src) =>
+        (_sortBy, _sortAsc) switch
+        {
+            ("srcserver",   true)  => src.OrderBy(r => r.SourceServer).ThenBy(r => r.SourceTableName).ToList(),
+            ("srcserver",   false) => src.OrderByDescending(r => r.SourceServer).ThenBy(r => r.SourceTableName).ToList(),
+            ("srcdatabase", true)  => src.OrderBy(r => r.SourceDatabase).ThenBy(r => r.SourceTableName).ToList(),
+            ("srcdatabase", false) => src.OrderByDescending(r => r.SourceDatabase).ThenBy(r => r.SourceTableName).ToList(),
+            ("srcschema",   true)  => src.OrderBy(r => r.SourceSchema).ThenBy(r => r.SourceTableName).ToList(),
+            ("srcschema",   false) => src.OrderByDescending(r => r.SourceSchema).ThenBy(r => r.SourceTableName).ToList(),
+            ("srctable",    true)  => src.OrderBy(r => r.SourceTableName).ToList(),
+            ("srctable",    false) => src.OrderByDescending(r => r.SourceTableName).ToList(),
+            ("destschema",  true)  => src.OrderBy(r => r.DestinationSchema).ThenBy(r => r.SourceTableName).ToList(),
+            ("destschema",  false) => src.OrderByDescending(r => r.DestinationSchema).ThenBy(r => r.SourceTableName).ToList(),
+            ("desttable",   true)  => src.OrderBy(r => r.DestinationTable).ToList(),
+            ("desttable",   false) => src.OrderByDescending(r => r.DestinationTable).ToList(),
+            _ => src
+        };
+
+    private void Sort(string col)
+    {
+        if (_sortBy == col) _sortAsc = !_sortAsc;
+        else { _sortBy = col; _sortAsc = true; }
+        _page = 1;
+    }
+
+    private string SortIndicator(string col) =>
+        _sortBy == col ? (_sortAsc ? " ▲" : " ▼") : string.Empty;
+
+    private async Task RunLoad()
+    {
+        _loading = true;
+        _loadResult = null;
+        try
+        {
+            _loadResult = await LoadService.LoadMigrationConfigsAsync();
+            await LoadData();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveTextField(MigrationConfigInfo dto, Action<MigrationConfig> applyChange, string? newDisplayValue)
+    {
+        var entity = await Repository.GetMigrationConfigByIdAsync(dto.MigrationConfigId);
+        if (entity is null) return;
+        applyChange(entity);
+        entity.ModifiedAt = DateTime.UtcNow;
+        entity.ModifiedBy = "user";
+        await Repository.UpdateMigrationConfigAsync(entity);
+
+        // Refresh the in-memory DTO so the UI reflects saved value without full reload
+        var refreshed = await Repository.GetMigrationConfigsAsync(includeInactive: true);
+        var updated = refreshed.FirstOrDefault(r => r.MigrationConfigId == dto.MigrationConfigId);
+        if (updated is not null)
+        {
+            var idx = _all!.FindIndex(r => r.MigrationConfigId == dto.MigrationConfigId);
+            if (idx >= 0) _all[idx] = updated;
+        }
+    }
+
+    private async Task ToggleIsActive(MigrationConfigInfo dto)
+    {
+        var entity = await Repository.GetMigrationConfigByIdAsync(dto.MigrationConfigId);
+        if (entity is null) return;
+        entity.IsActive    = !entity.IsActive;
+        entity.ModifiedAt  = DateTime.UtcNow;
+        entity.ModifiedBy  = "user";
+        await Repository.UpdateMigrationConfigAsync(entity);
+        dto.IsActive = entity.IsActive;
+        dto.ModifiedAt = entity.ModifiedAt;
+    }
+}

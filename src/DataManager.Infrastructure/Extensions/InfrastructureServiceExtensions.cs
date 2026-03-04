@@ -36,6 +36,7 @@ public static class InfrastructureServiceExtensions
         // Import services
         services.AddScoped<DataManagerImportService>();
         services.AddSingleton<ExcelImportService>();
+        services.AddScoped<MigrationConfigLoadService>();
 
         // DACPAC parsing services
         services.AddTransient<DacpacExtractorService>();

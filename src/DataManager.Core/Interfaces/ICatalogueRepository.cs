@@ -93,5 +93,13 @@ public interface IDataManagerRepository
     Task BulkInsertTableSchemaAsync(int tableId, IEnumerable<SourceIndex> indexes,
         IEnumerable<SourceForeignKey> foreignKeys, IEnumerable<SourceCheckConstraint> checkConstraints,
         IEnumerable<SourceUniqueConstraint> uniqueConstraints, IEnumerable<SourceTrigger> triggers);
+
+    // --- MigrationConfig ---
+    Task<IReadOnlyList<MigrationConfigInfo>> GetMigrationConfigsAsync(bool includeInactive = false);
+    Task<MigrationConfig?> GetMigrationConfigByIdAsync(int id);
+    Task<MigrationConfig> AddMigrationConfigAsync(MigrationConfig config);
+    Task UpdateMigrationConfigAsync(MigrationConfig config);
+    Task DeleteMigrationConfigAsync(int id);
+    Task BulkUpsertMigrationConfigsAsync(IEnumerable<MigrationConfig> configs);
 }
 

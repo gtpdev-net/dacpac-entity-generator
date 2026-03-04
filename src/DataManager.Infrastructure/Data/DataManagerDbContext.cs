@@ -32,6 +32,7 @@ public class DataManagerDbContext : DbContext
     public DbSet<SourceStoredProcedureParameter> SourceStoredProcedureParameters => Set<SourceStoredProcedureParameter>();
     public DbSet<SourceFunction> SourceFunctions => Set<SourceFunction>();
     public DbSet<SourceTrigger> SourceTriggers => Set<SourceTrigger>();
+    public DbSet<MigrationConfig> MigrationConfigs => Set<MigrationConfig>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -320,6 +321,30 @@ public class DataManagerDbContext : DbContext
                 .HasForeignKey(x => x.TableId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
+
+        // ── MigrationConfig ──────────────────────────────────────────────────
+        modelBuilder.Entity<MigrationConfig>(e =>
+        {
+            e.ToTable("MigrationConfigs");
+            e.HasKey(x => x.MigrationConfigId);
+            e.Property(x => x.SourceServer).IsRequired().HasMaxLength(255);
+            e.Property(x => x.SourceDatabase).IsRequired().HasMaxLength(255);
+            e.Property(x => x.SourceSchema).IsRequired().HasMaxLength(128);
+            e.Property(x => x.SourceTableName).IsRequired().HasMaxLength(255);
+            e.Property(x => x.DestinationServer).HasMaxLength(255);
+            e.Property(x => x.DestinationDatabase).HasMaxLength(255);
+            e.Property(x => x.DestinationSchema).IsRequired().HasMaxLength(128);
+            e.Property(x => x.DestinationTable).IsRequired().HasMaxLength(255);
+            e.Property(x => x.ColumnList).IsRequired().HasColumnType("nvarchar(max)");
+            e.Property(x => x.FilterCondition).HasColumnType("nvarchar(max)");
+            e.Property(x => x.IsActive).HasDefaultValue(true);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+            e.HasIndex(x => x.TableId).IsUnique().HasDatabaseName("UQ_MigrationConfigs_TableId");
+            e.HasOne(x => x.Table)
+                .WithMany()
+                .HasForeignKey(x => x.TableId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
@@ -425,6 +450,11 @@ public class DataManagerDbContext : DbContext
             {
                 if (entry.State == EntityState.Added) { tr.CreatedAt = now; tr.CreatedBy = user; }
                 if (entry.State is EntityState.Modified or EntityState.Added) { tr.ModifiedAt = now; tr.ModifiedBy = user; }
+            }
+            if (entry.Entity is MigrationConfig mc)
+            {
+                if (entry.State == EntityState.Added) { mc.CreatedAt = now; mc.CreatedBy = user; }
+                if (entry.State is EntityState.Modified or EntityState.Added) { mc.ModifiedAt = now; mc.ModifiedBy = user; }
             }
         }
 

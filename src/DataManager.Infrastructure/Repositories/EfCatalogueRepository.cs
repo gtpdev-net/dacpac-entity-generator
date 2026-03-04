@@ -684,4 +684,94 @@ public class EfDataManagerRepository : IDataManagerRepository
         db.SourceTriggers.AddRange(triggers);
         await db.SaveChangesAsync();
     }
+
+    // ── MigrationConfig ─────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<MigrationConfigInfo>> GetMigrationConfigsAsync(bool includeInactive = false)
+    {
+        using var db = _factory.CreateDbContext();
+        var q = db.MigrationConfigs.AsQueryable();
+        if (!includeInactive) q = q.Where(x => x.IsActive);
+        return await q.Select(m => new MigrationConfigInfo
+        {
+            MigrationConfigId  = m.MigrationConfigId,
+            TableId            = m.TableId,
+            SourceServer       = m.SourceServer,
+            SourceDatabase     = m.SourceDatabase,
+            SourceSchema       = m.SourceSchema,
+            SourceTableName    = m.SourceTableName,
+            DestinationServer  = m.DestinationServer,
+            DestinationDatabase = m.DestinationDatabase,
+            DestinationSchema  = m.DestinationSchema,
+            DestinationTable   = m.DestinationTable,
+            ColumnList         = m.ColumnList,
+            FilterCondition    = m.FilterCondition,
+            IsActive           = m.IsActive,
+            CreatedAt          = m.CreatedAt,
+            CreatedBy          = m.CreatedBy,
+            ModifiedAt         = m.ModifiedAt,
+            ModifiedBy         = m.ModifiedBy
+        })
+        .OrderBy(m => m.SourceServer)
+        .ThenBy(m => m.SourceDatabase)
+        .ThenBy(m => m.SourceSchema)
+        .ThenBy(m => m.SourceTableName)
+        .ToListAsync();
+    }
+
+    public async Task<MigrationConfig?> GetMigrationConfigByIdAsync(int id)
+    {
+        using var db = _factory.CreateDbContext();
+        return await db.MigrationConfigs.FirstOrDefaultAsync(x => x.MigrationConfigId == id);
+    }
+
+    public async Task<MigrationConfig> AddMigrationConfigAsync(MigrationConfig config)
+    {
+        using var db = _factory.CreateDbContext();
+        db.MigrationConfigs.Add(config);
+        await db.SaveChangesAsync();
+        return config;
+    }
+
+    public async Task UpdateMigrationConfigAsync(MigrationConfig config)
+    {
+        using var db = _factory.CreateDbContext();
+        db.MigrationConfigs.Update(config);
+        await db.SaveChangesAsync();
+    }
+
+    public async Task DeleteMigrationConfigAsync(int id)
+    {
+        using var db = _factory.CreateDbContext();
+        var entity = await db.MigrationConfigs.FindAsync(id);
+        if (entity is null) return;
+        db.MigrationConfigs.Remove(entity);
+        await db.SaveChangesAsync();
+    }
+
+    public async Task BulkUpsertMigrationConfigsAsync(IEnumerable<MigrationConfig> configs)
+    {
+        using var db = _factory.CreateDbContext();
+        foreach (var config in configs)
+        {
+            var existing = await db.MigrationConfigs
+                .FirstOrDefaultAsync(x => x.TableId == config.TableId);
+            if (existing is null)
+            {
+                db.MigrationConfigs.Add(config);
+            }
+            else
+            {
+                existing.SourceServer      = config.SourceServer;
+                existing.SourceDatabase    = config.SourceDatabase;
+                existing.SourceSchema      = config.SourceSchema;
+                existing.SourceTableName   = config.SourceTableName;
+                existing.DestinationSchema = config.DestinationSchema;
+                existing.DestinationTable  = config.DestinationTable;
+                existing.ColumnList        = config.ColumnList;
+                // Preserve user-edited: DestinationServer, DestinationDatabase, FilterCondition, IsActive
+            }
+        }
+        await db.SaveChangesAsync();
+    }
 }
