@@ -1,0 +1,62 @@
+@inject IDataManagerRepository Repository
+
+@if (_loading)
+{
+    <div class="spinner-border spinner-border-sm" role="status"></div>
+}
+else if (_function is null)
+{
+    <div class="alert alert-warning">Function not found.</div>
+}
+else
+{
+    <h5 class="d-flex justify-content-between align-items-center mb-3">
+        𝑓 <span class="text-muted fw-normal">[@_function.SchemaName].</span>@_function.FunctionName
+        <span class="badge @(_function.IsActive ? "text-bg-success" : "text-bg-secondary") fs-6">
+            @(_function.IsActive ? "Active" : "Inactive")
+        </span>
+    </h5>
+
+    <table class="table table-sm table-borderless mb-3">
+        <tbody>
+            @if (!string.IsNullOrWhiteSpace(_function.FunctionType))
+            {
+                <tr><th class="text-muted fw-normal" style="width:130px">Type</th>
+                    <td><span class="badge text-bg-info">@_function.FunctionType</span></td></tr>
+            }
+            @if (!string.IsNullOrWhiteSpace(_function.ReturnType))
+            {
+                <tr><th class="text-muted fw-normal">Returns</th><td>@_function.ReturnType</td></tr>
+            }
+        </tbody>
+    </table>
+
+    <h6>SQL Body</h6>
+    <SqlCodeBlock SqlBody="@_function.SqlBody" />
+
+    @if (_sourceId.HasValue)
+    {
+        <a class="btn btn-sm btn-outline-primary mt-2"
+           href="/servers/@_sourceId/databases/@_function.DatabaseId/schema/functions/@EntityId">Open Full Page →</a>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public int EntityId { get; set; }
+
+    private bool _loading = true;
+    private SourceFunctionDetail? _function;
+    private int? _sourceId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _function = await Repository.GetFunctionByIdAsync(EntityId);
+        if (_function is not null)
+        {
+            var db = await Repository.GetDatabaseByIdAsync(_function.DatabaseId);
+            _sourceId = db?.SourceId;
+        }
+        _loading = false;
+    }
+}

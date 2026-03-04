@@ -1,0 +1,81 @@
+@inject IDataManagerRepository Repository
+
+@if (_loading)
+{
+    <div class="spinner-border spinner-border-sm" role="status"></div>
+}
+else if (_view is null)
+{
+    <div class="alert alert-warning">View not found.</div>
+}
+else
+{
+    <h5 class="d-flex justify-content-between align-items-center mb-3">
+        👁️ <span class="text-muted fw-normal">[@_view.SchemaName].</span>@_view.ViewName
+        <span class="badge @(_view.IsActive ? "text-bg-success" : "text-bg-secondary") fs-6">
+            @(_view.IsActive ? "Active" : "Inactive")
+        </span>
+    </h5>
+
+    @if (_view.HasStandardAuditColumns)
+    {
+        <div class="alert alert-info py-2 mb-3 small">
+            ✅ Has standard audit columns (CreatedAt, ModifiedAt, CreatedBy, ModifiedBy).
+        </div>
+    }
+
+    <h6>Columns <span class="badge text-bg-secondary ms-1">@_view.Columns.Count</span></h6>
+    @if (_view.Columns.Count > 0)
+    {
+        <table class="table table-sm table-bordered table-hover align-middle mb-3">
+            <thead class="table-light">
+                <tr>
+                    <th class="text-end" style="width:50px">#</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th style="width:70px">Nullable</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var col in _view.Columns.OrderBy(c => c.OrdinalPosition))
+                {
+                    <tr>
+                        <td class="text-end text-muted">@col.OrdinalPosition</td>
+                        <td><code>@col.ColumnName</code></td>
+                        <td>@col.SqlType</td>
+                        <td><FlagBadge Value="@col.IsNullable" /></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <h6>SQL Body</h6>
+    <SqlCodeBlock SqlBody="@_view.SqlBody" />
+
+    @if (_sourceId.HasValue)
+    {
+        <a class="btn btn-sm btn-outline-primary mt-2"
+           href="/servers/@_sourceId/databases/@_view.DatabaseId/schema/views/@EntityId">Open Full Page →</a>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public int EntityId { get; set; }
+
+    private bool _loading = true;
+    private SourceViewDetail? _view;
+    private int? _sourceId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _view = await Repository.GetViewByIdAsync(EntityId);
+        if (_view is not null)
+        {
+            var db = await Repository.GetDatabaseByIdAsync(_view.DatabaseId);
+            _sourceId = db?.SourceId;
+        }
+        _loading = false;
+    }
+}

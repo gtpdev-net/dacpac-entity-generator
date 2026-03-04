@@ -1,0 +1,82 @@
+@inject IDataManagerRepository Repository
+
+@if (_loading)
+{
+    <div class="spinner-border spinner-border-sm" role="status"></div>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-warning">@_error</div>
+}
+else if (_fk is null)
+{
+    <div class="alert alert-warning">Foreign key not found.</div>
+}
+else
+{
+    <h5 class="mb-3">Foreign Key: @_fk.Name</h5>
+
+    <table class="table table-sm table-borderless mb-3">
+        <tbody>
+            <tr><th class="text-muted fw-normal" style="width:160px">References</th>
+                <td><code>[@_fk.ToSchema].[@_fk.ToTable]</code></td></tr>
+            @if (!string.IsNullOrWhiteSpace(_fk.Cardinality))
+            {
+                <tr><th class="text-muted fw-normal">Cardinality</th><td>@_fk.Cardinality</td></tr>
+            }
+            <tr><th class="text-muted fw-normal">On Delete Cascade</th>
+                <td><FlagBadge Value="@_fk.OnDeleteCascade" /></td></tr>
+        </tbody>
+    </table>
+
+    <h6>Column Mapping</h6>
+    <table class="table table-sm table-bordered align-middle mb-3">
+        <thead class="table-light">
+            <tr><th>From Column</th><th>To Column</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var col in _fk.Columns.OrderBy(c => c.Ordinal))
+            {
+                <tr>
+                    <td><code>@col.FromColumn</code></td>
+                    <td><code>@col.ToColumn</code></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter, EditorRequired] public TreeNode Node { get; set; } = null!;
+
+    private bool _loading = true;
+    private SourceForeignKeySummary? _fk;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+        _fk = null;
+
+        var tableId = ExtractSegmentId(Node.Id, "table-");
+        if (tableId is null)
+        {
+            _error = "Could not determine parent table.";
+            _loading = false;
+            return;
+        }
+
+        var fks = await Repository.GetForeignKeysAsync(tableId.Value);
+        _fk = fks.FirstOrDefault(f => f.SourceForeignKeyId == Node.EntityId);
+        _loading = false;
+    }
+
+    private static int? ExtractSegmentId(string nodeId, string prefix)
+    {
+        foreach (var seg in nodeId.Split('/'))
+            if (seg.StartsWith(prefix) && int.TryParse(seg[prefix.Length..], out int id))
+                return id;
+        return null;
+    }
+}

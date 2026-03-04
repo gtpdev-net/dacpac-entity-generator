@@ -1,0 +1,184 @@
+@page "/schema-browser"
+@page "/schema-browser/{*Path}"
+@rendermode InteractiveServer
+@inject NavigationManager NavManager
+@inject IConfiguration Configuration
+
+<PageTitle>Schema Browser &mdash; @Configuration["AppTitle"]</PageTitle>
+
+<BreadcrumbNav Items="@_breadcrumbs" />
+
+<div class="row g-0" style="min-height: calc(100vh - 120px);">
+    <!-- Tree Panel -->
+    <div class="col-12 col-lg-4">
+        <SchemaTreePanel @ref="_treePanel" OnNodeSelected="HandleNodeSelected" />
+    </div>
+
+    <!-- Detail Panel -->
+    <div class="col-12 col-lg-8">
+        <SchemaDetailPanel SelectedNode="@_selectedNode" />
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? Path { get; set; }
+
+    private TreeNode? _selectedNode;
+    private SchemaTreePanel? _treePanel;
+    private string? _lastPath;
+    private IEnumerable<BreadcrumbItem> _breadcrumbs = [];
+
+    protected override void OnParametersSet()
+    {
+        // Path changes are handled in OnAfterRenderAsync once the panel component is mounted
+        UpdateBreadcrumbs();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !string.IsNullOrWhiteSpace(Path) && _treePanel is not null)
+        {
+            _lastPath = Path;
+            await DeepLinkAsync(Path);
+            StateHasChanged();
+        }
+    }
+
+    private Task HandleNodeSelected(TreeNode node)
+    {
+        _selectedNode = node;
+        UpdateBreadcrumbs();
+        var urlPath = BuildPath(node);
+        if (!string.IsNullOrEmpty(urlPath))
+            NavManager.NavigateTo($"/schema-browser/{urlPath}", replace: true);
+        return Task.CompletedTask;
+    }
+
+    private void UpdateBreadcrumbs()
+    {
+        var items = new List<BreadcrumbItem>
+        {
+            new BreadcrumbItem("Schema Browser", "/schema-browser")
+        };
+
+        if (_selectedNode is not null && _selectedNode.NodeType != TreeNodeType.Server)
+        {
+            // Build ancestry chain from node ID
+            var parts = BuildPathParts(_selectedNode);
+            foreach (var (label, href) in parts)
+                items.Add(new BreadcrumbItem(label, href));
+        }
+        else if (_selectedNode is not null)
+        {
+            items.Add(new BreadcrumbItem(_selectedNode.Label, isActive: true));
+        }
+
+        // Make last item active
+        if (items.Count > 1)
+        {
+            var last = items[^1];
+            items[^1] = new BreadcrumbItem(last.Label, isActive: true);
+        }
+        else
+        {
+            items[0] = new BreadcrumbItem("Schema Browser", isActive: true);
+        }
+
+        _breadcrumbs = items;
+    }
+
+    // ── URL building ──────────────────────────────────────────────────────────
+
+    private static string BuildPath(TreeNode node)
+    {
+        var parts = new List<string>();
+        foreach (var seg in node.Id.Split('/'))
+        {
+            if (seg.StartsWith("server-"))       parts.Add($"server/{seg["server-".Length..]}");
+            else if (seg.StartsWith("db-"))      parts.Add($"database/{seg["db-".Length..]}");
+            else if (seg.StartsWith("schema-"))  parts.Add($"schema/{seg["schema-".Length..]}");
+            else if (seg.StartsWith("table-"))   parts.Add($"table/{seg["table-".Length..]}");
+            else if (seg.StartsWith("col-"))     parts.Add($"column/{seg["col-".Length..]}");
+            else if (seg.StartsWith("idx-"))     parts.Add($"index/{seg["idx-".Length..]}");
+            else if (seg.StartsWith("fk-"))      parts.Add($"foreignkey/{seg["fk-".Length..]}");
+            else if (seg.StartsWith("chk-"))     parts.Add($"checkconstraint/{seg["chk-".Length..]}");
+            else if (seg.StartsWith("uq-"))      parts.Add($"uniqueconstraint/{seg["uq-".Length..]}");
+            else if (seg.StartsWith("trig-"))    parts.Add($"trigger/{seg["trig-".Length..]}");
+            else if (seg.StartsWith("view-"))    parts.Add($"view/{seg["view-".Length..]}");
+            else if (seg.StartsWith("proc-"))    parts.Add($"storedprocedure/{seg["proc-".Length..]}");
+            else if (seg.StartsWith("func-"))    parts.Add($"function/{seg["func-".Length..]}");
+            // Skip category segments (tables, views, procs, funcs, cols, idxs, etc.)
+        }
+        return string.Join("/", parts);
+    }
+
+    private static IEnumerable<(string Label, string? Href)> BuildPathParts(TreeNode node)
+    {
+        // We only need the label; for breadcrumbs we just use the node label
+        yield return (node.Label, null);
+    }
+
+    // ── Deep-link parsing ─────────────────────────────────────────────────────
+
+    private async Task DeepLinkAsync(string urlPath)
+    {
+        if (_treePanel is null) return;
+
+        // Parse URL path into (type, value) pairs
+        var segments = urlPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+        // Build the tree node ID from URL segments
+        var treeNodeId = BuildTreeNodeIdFromUrl(segments);
+        if (string.IsNullOrEmpty(treeNodeId)) return;
+
+        // Expand the tree to the node
+        await _treePanel.ExpandToNodeAsync(treeNodeId);
+
+        // Find and select the terminal node
+        var node = _treePanel.FindNodeById(treeNodeId);
+        if (node is not null)
+        {
+            await _treePanel.SelectNodeAsync(node);
+            _selectedNode = node;
+            UpdateBreadcrumbs();
+            StateHasChanged();
+        }
+    }
+
+    private static string BuildTreeNodeIdFromUrl(string[] segments)
+    {
+        // segments are pairs: ["server", "1", "database", "3", "schema", "dbo", "table", "12", "column", "45"]
+        if (segments.Length < 2) return string.Empty;
+
+        var parts = new List<string>();
+
+        for (int i = 0; i < segments.Length - 1; i += 2)
+        {
+            var type = segments[i].ToLowerInvariant();
+            var value = segments[i + 1];
+
+            var treeSegment = type switch
+            {
+                "server"             => $"server-{value}",
+                "database"           => $"db-{value}",
+                "schema"             => $"schema-{value}",
+                "table"              => $"table-{value}",
+                "column"             => $"col-{value}",
+                "index"              => $"idx-{value}",
+                "foreignkey"         => $"fk-{value}",
+                "checkconstraint"    => $"chk-{value}",
+                "uniqueconstraint"   => $"uq-{value}",
+                "trigger"            => $"trig-{value}",
+                "view"               => $"view-{value}",
+                "storedprocedure"    => $"proc-{value}",
+                "function"           => $"func-{value}",
+                _ => null
+            };
+
+            if (treeSegment is null) break;
+            parts.Add(treeSegment);
+        }
+
+        return string.Join("/", parts);
+    }
+}

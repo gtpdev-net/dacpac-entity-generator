@@ -247,3 +247,22 @@ public class SchemaImportResultDto
     public List<string> Messages { get; set; } = new();
 }
 
+public class SourceCheckConstraintSummary
+{
+    public int SourceCheckConstraintId { get; set; }
+    public int TableId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Expression { get; set; } = string.Empty;
+    public bool IsActive { get; set; }
+}
+
+public class SourceUniqueConstraintSummary
+{
+    public int SourceUniqueConstraintId { get; set; }
+    public int TableId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public bool IsClustered { get; set; }
+    public List<string> Columns { get; set; } = new();
+    public bool IsActive { get; set; }
+}
+

@@ -1,0 +1,30 @@
+@* SchemaSummaryDetail - shows schema stats derived from tree node children *@
+
+@if (Node is null)
+{
+    <p class="text-muted">No schema selected.</p>
+}
+else
+{
+    <h5 class="mb-3">📂 @Node.Label</h5>
+
+    <table class="table table-sm table-borderless mb-3">
+        <tbody>
+            @foreach (var cat in Node.Children)
+            {
+                <tr>
+                    <th class="text-muted fw-normal" style="width:180px">@cat.Label</th>
+                    <td>@cat.Children.Count</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    @if (!Node.ChildrenLoaded)
+    {
+        <p class="text-muted small fst-italic">Expand the schema node in the tree to load object counts.</p>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public TreeNode Node { get; set; } = null!;
+}

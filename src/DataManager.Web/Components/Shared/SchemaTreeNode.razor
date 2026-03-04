@@ -1,0 +1,127 @@
+@if (Node is null) { return; }
+@if (!ShowInactive && Node.IsActive == false) { return; }
+@if (!IsVisible) { return; }
+
+<div class="tree-node @(Node.IsSelected ? "tree-node--selected" : "")"
+     style="padding-left: @(Depth * 20)px">
+
+    <span class="tree-node__chevron"
+          @onclick="HandleChevronClick"
+          @onclick:stopPropagation="true">
+        @if (HasChildren)
+        {
+            if (Node.IsLoading)
+            {
+                <span class="spinner-border spinner-border-sm tree-spinner" role="status"></span>
+            }
+            else
+            {
+                @(Node.IsExpanded ? "▾" : "▸")
+            }
+        }
+        else
+        {
+            <span class="tree-node__spacer">&nbsp;&nbsp;</span>
+        }
+    </span>
+
+    <span class="tree-node__label @GetLabelClass()"
+          @onclick="HandleNodeClick">
+        @GetIcon() @Node.Label
+        @if (!string.IsNullOrEmpty(Node.BadgeText))
+        {
+            <span class="badge text-bg-secondary ms-1 fw-normal">@Node.BadgeText</span>
+        }
+    </span>
+</div>
+
+@if (Node.IsExpanded && Node.Children.Count > 0)
+{
+    @foreach (var child in Node.Children)
+    {
+        <SchemaTreeNode Node="child"
+                        OnNodeSelected="OnNodeSelected"
+                        OnToggleExpand="OnToggleExpand"
+                        Depth="@(Depth + 1)"
+                        ShowInactive="ShowInactive" />
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public TreeNode Node { get; set; } = null!;
+    [Parameter, EditorRequired] public EventCallback<TreeNode> OnNodeSelected { get; set; }
+    [Parameter, EditorRequired] public EventCallback<TreeNode> OnToggleExpand { get; set; }
+    [Parameter] public int Depth { get; set; } = 0;
+    [Parameter] public bool ShowInactive { get; set; } = true;
+
+    // Visibility is set by the parent panel during search filtering
+    [Parameter] public bool IsVisible { get; set; } = true;
+
+    private bool HasChildren =>
+        Node.ChildCount > 0 ||
+        Node.Children.Count > 0 ||
+        NodeTypeHasChildren(Node.NodeType);
+
+    private static bool NodeTypeHasChildren(TreeNodeType t) => t is
+        TreeNodeType.Server or
+        TreeNodeType.Database or
+        TreeNodeType.Schema or
+        TreeNodeType.Table or
+        TreeNodeType.View or
+        TreeNodeType.StoredProcedure or
+        TreeNodeType.Function or
+        TreeNodeType.ServerCategory or
+        TreeNodeType.DatabaseCategory or
+        TreeNodeType.TableCategory or
+        TreeNodeType.ColumnCategory or
+        TreeNodeType.IndexCategory or
+        TreeNodeType.ForeignKeyCategory or
+        TreeNodeType.CheckConstraintCategory or
+        TreeNodeType.UniqueConstraintCategory or
+        TreeNodeType.TriggerCategory or
+        TreeNodeType.ViewCategory or
+        TreeNodeType.StoredProcedureCategory or
+        TreeNodeType.FunctionCategory or
+        TreeNodeType.SchemaCategory;
+
+    private async Task HandleChevronClick()
+    {
+        if (HasChildren)
+            await OnToggleExpand.InvokeAsync(Node);
+    }
+
+    private async Task HandleNodeClick()
+    {
+        await OnNodeSelected.InvokeAsync(Node);
+    }
+
+    private string GetLabelClass() => Node.NodeType switch
+    {
+        TreeNodeType.ServerCategory or
+        TreeNodeType.DatabaseCategory or
+        TreeNodeType.SchemaCategory or
+        TreeNodeType.TableCategory or
+        TreeNodeType.ColumnCategory or
+        TreeNodeType.IndexCategory or
+        TreeNodeType.ForeignKeyCategory or
+        TreeNodeType.CheckConstraintCategory or
+        TreeNodeType.UniqueConstraintCategory or
+        TreeNodeType.TriggerCategory or
+        TreeNodeType.ViewCategory or
+        TreeNodeType.StoredProcedureCategory or
+        TreeNodeType.FunctionCategory => "tree-node__category",
+        _ => ""
+    };
+
+    private string GetIcon() => Node.NodeType switch
+    {
+        TreeNodeType.Server => "🖥️",
+        TreeNodeType.Database => "🗄️",
+        TreeNodeType.Schema or TreeNodeType.SchemaCategory => "📂",
+        TreeNodeType.Table => "📄",
+        TreeNodeType.View => "👁️",
+        TreeNodeType.StoredProcedure => "⚙️",
+        TreeNodeType.Function => "𝑓",
+        _ => ""
+    };
+}

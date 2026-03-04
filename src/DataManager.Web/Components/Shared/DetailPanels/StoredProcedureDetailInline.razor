@@ -1,0 +1,74 @@
+@inject IDataManagerRepository Repository
+
+@if (_loading)
+{
+    <div class="spinner-border spinner-border-sm" role="status"></div>
+}
+else if (_proc is null)
+{
+    <div class="alert alert-warning">Stored procedure not found.</div>
+}
+else
+{
+    <h5 class="d-flex justify-content-between align-items-center mb-3">
+        ⚙️ <span class="text-muted fw-normal">[@_proc.SchemaName].</span>@_proc.ProcedureName
+        <span class="badge @(_proc.IsActive ? "text-bg-success" : "text-bg-secondary") fs-6">
+            @(_proc.IsActive ? "Active" : "Inactive")
+        </span>
+    </h5>
+
+    <h6>Parameters <span class="badge text-bg-secondary ms-1">@_proc.Parameters.Count</span></h6>
+    @if (_proc.Parameters.Count > 0)
+    {
+        <table class="table table-sm table-bordered table-hover align-middle mb-3">
+            <thead class="table-light">
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th style="width:70px">Output</th>
+                    <th>Default</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in _proc.Parameters)
+                {
+                    <tr>
+                        <td><code>@p.Name</code></td>
+                        <td>@p.SqlType</td>
+                        <td><FlagBadge Value="@p.IsOutput" /></td>
+                        <td>@p.DefaultValue</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <h6>SQL Body</h6>
+    <SqlCodeBlock SqlBody="@_proc.SqlBody" />
+
+    @if (_sourceId.HasValue)
+    {
+        <a class="btn btn-sm btn-outline-primary mt-2"
+           href="/servers/@_sourceId/databases/@_proc.DatabaseId/schema/storedprocedures/@EntityId">Open Full Page →</a>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public int EntityId { get; set; }
+
+    private bool _loading = true;
+    private SourceStoredProcedureDetail? _proc;
+    private int? _sourceId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _proc = await Repository.GetStoredProcedureByIdAsync(EntityId);
+        if (_proc is not null)
+        {
+            var db = await Repository.GetDatabaseByIdAsync(_proc.DatabaseId);
+            _sourceId = db?.SourceId;
+        }
+        _loading = false;
+    }
+}

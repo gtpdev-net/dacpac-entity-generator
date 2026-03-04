@@ -1,0 +1,18 @@
+.tree-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    border-right: 1px solid var(--bs-border-color);
+}
+
+.tree-panel__toolbar {
+    padding: 8px;
+    border-bottom: 1px solid var(--bs-border-color);
+    background: var(--bs-tertiary-bg);
+}
+
+.tree-panel__scroll {
+    overflow-y: auto;
+    flex: 1;
+    max-height: calc(100vh - 180px);
+}

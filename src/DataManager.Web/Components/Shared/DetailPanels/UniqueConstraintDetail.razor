@@ -1,0 +1,66 @@
+@inject IDataManagerRepository Repository
+
+@if (_loading)
+{
+    <div class="spinner-border spinner-border-sm" role="status"></div>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-warning">@_error</div>
+}
+else if (_constraint is null)
+{
+    <div class="alert alert-warning">Unique constraint not found.</div>
+}
+else
+{
+    <h5 class="mb-3">Unique Constraint: @_constraint.Name</h5>
+
+    <div class="mb-2">
+        @if (_constraint.IsClustered) { <span class="badge text-bg-secondary me-1">Clustered</span> }
+        <FlagBadge Value="@_constraint.IsActive" />
+    </div>
+
+    <h6>Columns</h6>
+    <ul class="list-group list-group-flush mb-3">
+        @foreach (var col in _constraint.Columns)
+        {
+            <li class="list-group-item py-1 ps-0"><code>@col</code></li>
+        }
+    </ul>
+}
+
+@code {
+    [Parameter, EditorRequired] public TreeNode Node { get; set; } = null!;
+
+    private bool _loading = true;
+    private SourceUniqueConstraintSummary? _constraint;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+        _constraint = null;
+
+        var tableId = ExtractSegmentId(Node.Id, "table-");
+        if (tableId is null)
+        {
+            _error = "Could not determine parent table.";
+            _loading = false;
+            return;
+        }
+
+        var uniques = await Repository.GetUniqueConstraintsAsync(tableId.Value);
+        _constraint = uniques.FirstOrDefault(u => u.SourceUniqueConstraintId == Node.EntityId);
+        _loading = false;
+    }
+
+    private static int? ExtractSegmentId(string nodeId, string prefix)
+    {
+        foreach (var seg in nodeId.Split('/'))
+            if (seg.StartsWith(prefix) && int.TryParse(seg[prefix.Length..], out int id))
+                return id;
+        return null;
+    }
+}

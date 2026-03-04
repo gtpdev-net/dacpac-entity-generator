@@ -516,6 +516,42 @@ public class EfDataManagerRepository : IDataManagerRepository
             }).ToListAsync();
     }
 
+    // ── Check Constraints ────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<SourceCheckConstraintSummary>> GetCheckConstraintsAsync(int tableId)
+    {
+        return await _db.SourceCheckConstraints
+            .Where(c => c.TableId == tableId && c.IsActive)
+            .OrderBy(c => c.Name)
+            .Select(c => new SourceCheckConstraintSummary
+            {
+                SourceCheckConstraintId = c.SourceCheckConstraintId,
+                TableId = c.TableId,
+                Name = c.Name,
+                Expression = c.Expression,
+                IsActive = c.IsActive
+            }).ToListAsync();
+    }
+
+    // ── Unique Constraints ───────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<SourceUniqueConstraintSummary>> GetUniqueConstraintsAsync(int tableId)
+    {
+        return await _db.SourceUniqueConstraints
+            .Include(uc => uc.Columns)
+            .Where(uc => uc.TableId == tableId && uc.IsActive)
+            .OrderBy(uc => uc.Name)
+            .Select(uc => new SourceUniqueConstraintSummary
+            {
+                SourceUniqueConstraintId = uc.SourceUniqueConstraintId,
+                TableId = uc.TableId,
+                Name = uc.Name,
+                IsClustered = uc.IsClustered,
+                Columns = uc.Columns.Select(c => c.ColumnName).ToList(),
+                IsActive = uc.IsActive
+            }).ToListAsync();
+    }
+
     // ── Schema import ────────────────────────────────────────────────────────
 
     public async Task UpdateDatabaseHashAsync(int databaseId, string modelHash)

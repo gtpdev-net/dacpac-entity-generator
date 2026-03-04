@@ -1,0 +1,63 @@
+@inject IDataManagerRepository Repository
+
+@if (_loading)
+{
+    <div class="spinner-border spinner-border-sm" role="status"></div>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-warning">@_error</div>
+}
+else if (_constraint is null)
+{
+    <div class="alert alert-warning">Check constraint not found.</div>
+}
+else
+{
+    <h5 class="mb-3">Check Constraint: @_constraint.Name</h5>
+
+    <table class="table table-sm table-borderless mb-3">
+        <tbody>
+            <tr><th class="text-muted fw-normal" style="width:120px">Active</th>
+                <td><FlagBadge Value="@_constraint.IsActive" /></td></tr>
+        </tbody>
+    </table>
+
+    <h6>Expression</h6>
+    <pre class="bg-light border rounded p-2 small"><code>@_constraint.Expression</code></pre>
+}
+
+@code {
+    [Parameter, EditorRequired] public TreeNode Node { get; set; } = null!;
+
+    private bool _loading = true;
+    private SourceCheckConstraintSummary? _constraint;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+        _constraint = null;
+
+        var tableId = ExtractSegmentId(Node.Id, "table-");
+        if (tableId is null)
+        {
+            _error = "Could not determine parent table.";
+            _loading = false;
+            return;
+        }
+
+        var checks = await Repository.GetCheckConstraintsAsync(tableId.Value);
+        _constraint = checks.FirstOrDefault(c => c.SourceCheckConstraintId == Node.EntityId);
+        _loading = false;
+    }
+
+    private static int? ExtractSegmentId(string nodeId, string prefix)
+    {
+        foreach (var seg in nodeId.Split('/'))
+            if (seg.StartsWith(prefix) && int.TryParse(seg[prefix.Length..], out int id))
+                return id;
+        return null;
+    }
+}

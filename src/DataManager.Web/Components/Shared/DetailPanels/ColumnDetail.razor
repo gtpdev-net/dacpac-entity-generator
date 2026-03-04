@@ -1,0 +1,75 @@
+@inject IDataManagerRepository Repository
+
+@if (_loading)
+{
+    <div class="spinner-border spinner-border-sm" role="status"></div>
+}
+else if (_column is null)
+{
+    <div class="alert alert-warning">Column not found.</div>
+}
+else
+{
+    <h5 class="d-flex justify-content-between align-items-center mb-3">
+        <code>@_column.ColumnName</code>
+        <span class="badge @(_column.IsActive ? "text-bg-success" : "text-bg-secondary") fs-6">
+            @(_column.IsActive ? "Active" : "Inactive")
+        </span>
+    </h5>
+
+    <table class="table table-sm table-borderless mb-3">
+        <tbody>
+            <tr><th class="text-muted fw-normal" style="width:190px">SQL Type</th><td>@(_column.SqlType ?? "—")</td></tr>
+            <tr><th class="text-muted fw-normal">Nullable</th><td><FlagBadge Value="@_column.IsNullable" /></td></tr>
+            <tr><th class="text-muted fw-normal">Max Length</th><td>@(_column.MaxLength?.ToString() ?? "—")</td></tr>
+            <tr><th class="text-muted fw-normal">Precision</th><td>@(_column.Precision?.ToString() ?? "—")</td></tr>
+            <tr><th class="text-muted fw-normal">Scale</th><td>@(_column.Scale?.ToString() ?? "—")</td></tr>
+            <tr><th class="text-muted fw-normal">Primary Key</th><td><FlagBadge Value="@_column.IsPrimaryKey" /></td></tr>
+            <tr><th class="text-muted fw-normal">Identity</th><td><FlagBadge Value="@_column.IsIdentity" /></td></tr>
+            <tr><th class="text-muted fw-normal">Computed</th><td><FlagBadge Value="@_column.IsComputed" /></td></tr>
+            @if (_column.IsComputed)
+            {
+                <tr><th class="text-muted fw-normal">Computed Persisted</th><td><FlagBadge Value="@_column.IsComputedPersisted" /></td></tr>
+                <tr><th class="text-muted fw-normal">Expression</th><td><code>@_column.ComputedExpression</code></td></tr>
+            }
+            <tr><th class="text-muted fw-normal">Row Version</th><td><FlagBadge Value="@_column.IsRowVersion" /></td></tr>
+            <tr><th class="text-muted fw-normal">Concurrency Token</th><td><FlagBadge Value="@_column.IsConcurrencyToken" /></td></tr>
+            @if (!string.IsNullOrWhiteSpace(_column.Collation))
+            {
+                <tr><th class="text-muted fw-normal">Collation</th><td>@_column.Collation</td></tr>
+            }
+            @if (!string.IsNullOrWhiteSpace(_column.DefaultValue))
+            {
+                <tr><th class="text-muted fw-normal">Default Value</th><td><code>@_column.DefaultValue</code></td></tr>
+            }
+            <tr><th class="text-muted fw-normal">Sort Order</th><td>@_column.SortOrder</td></tr>
+            <tr><th class="text-muted fw-normal">Persistence Type</th><td><PersistenceTypeBadge Type="@_column.PersistenceType" /></td></tr>
+            <tr><th class="text-muted fw-normal">In DAO Analysis</th><td><FlagBadge Value="@_column.IsInDaoAnalysis" /></td></tr>
+            <tr><th class="text-muted fw-normal">Added By API</th><td><FlagBadge Value="@_column.IsAddedByApi" /></td></tr>
+            <tr><th class="text-muted fw-normal">Selected For Load</th><td><FlagBadge Value="@_column.IsSelectedForLoad" /></td></tr>
+            @if (!string.IsNullOrWhiteSpace(_column.Description))
+            {
+                <tr><th class="text-muted fw-normal">Description</th><td>@_column.Description</td></tr>
+            }
+            <tr><th class="text-muted fw-normal">Created</th><td>@_column.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC</td></tr>
+            @if (_column.ModifiedAt.HasValue)
+            {
+                <tr><th class="text-muted fw-normal">Modified</th><td>@_column.ModifiedAt.Value.ToString("yyyy-MM-dd HH:mm") UTC</td></tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter, EditorRequired] public int EntityId { get; set; }
+
+    private bool _loading = true;
+    private SourceColumn? _column;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _column = await Repository.GetColumnByIdAsync(EntityId);
+        _loading = false;
+    }
+}

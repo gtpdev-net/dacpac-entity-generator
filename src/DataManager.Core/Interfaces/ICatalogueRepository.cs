@@ -78,6 +78,12 @@ public interface IDataManagerRepository
     // --- Foreign Keys ---
     Task<IReadOnlyList<SourceForeignKeySummary>> GetForeignKeysAsync(int tableId);
 
+    // --- Check Constraints ---
+    Task<IReadOnlyList<SourceCheckConstraintSummary>> GetCheckConstraintsAsync(int tableId);
+
+    // --- Unique Constraints ---
+    Task<IReadOnlyList<SourceUniqueConstraintSummary>> GetUniqueConstraintsAsync(int tableId);
+
     // --- Schema import (bulk operations) ---
     Task UpdateDatabaseHashAsync(int databaseId, string modelHash);
     Task DeleteSchemaForDatabaseAsync(int databaseId);

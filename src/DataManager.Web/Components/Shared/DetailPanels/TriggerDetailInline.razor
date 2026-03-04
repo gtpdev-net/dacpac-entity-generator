@@ -1,0 +1,83 @@
+@inject IDataManagerRepository Repository
+
+@if (_loading)
+{
+    <div class="spinner-border spinner-border-sm" role="status"></div>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-warning">@_error</div>
+}
+else if (_trigger is null)
+{
+    <div class="alert alert-warning">Trigger not found.</div>
+}
+else
+{
+    <h5 class="d-flex justify-content-between align-items-center mb-3">
+        <span class="text-muted fw-normal">[@_trigger.SchemaName].</span>@_trigger.TriggerName
+        <span class="badge @(_trigger.IsActive ? "text-bg-success" : "text-bg-secondary") fs-6">
+            @(_trigger.IsActive ? "Active" : "Inactive")
+        </span>
+    </h5>
+
+    @if (_tableId.HasValue && _sourceId.HasValue && _databaseId.HasValue)
+    {
+        <p class="small">
+            <span class="text-muted me-1">Parent Table:</span>
+            <a href="/servers/@_sourceId/databases/@_databaseId/tables/@_tableId/edit">@_tableName</a>
+        </p>
+    }
+
+    <h6>SQL Body</h6>
+    <SqlCodeBlock SqlBody="@_trigger.SqlBody" />
+}
+
+@code {
+    [Parameter, EditorRequired] public TreeNode Node { get; set; } = null!;
+
+    private bool _loading = true;
+    private SourceTriggerDetail? _trigger;
+    private string? _error;
+    private string _tableName = string.Empty;
+    private int? _tableId;
+    private int? _databaseId;
+    private int? _sourceId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+        _trigger = null;
+
+        _tableId = ExtractSegmentId(Node.Id, "table-");
+        if (_tableId is null)
+        {
+            _error = "Could not determine parent table.";
+            _loading = false;
+            return;
+        }
+
+        var triggers = await Repository.GetTriggerDetailsAsync(_tableId.Value);
+        _trigger = triggers.FirstOrDefault(t => t.SourceTriggerId == Node.EntityId);
+
+        var table = await Repository.GetTableByIdAsync(_tableId.Value);
+        if (table is not null)
+        {
+            _tableName = $"[{table.SchemaName}].[{table.TableName}]";
+            _databaseId = table.DatabaseId;
+            var db = await Repository.GetDatabaseByIdAsync(table.DatabaseId);
+            _sourceId = db?.SourceId;
+        }
+
+        _loading = false;
+    }
+
+    private static int? ExtractSegmentId(string nodeId, string prefix)
+    {
+        foreach (var seg in nodeId.Split('/'))
+            if (seg.StartsWith(prefix) && int.TryParse(seg[prefix.Length..], out int id))
+                return id;
+        return null;
+    }
+}

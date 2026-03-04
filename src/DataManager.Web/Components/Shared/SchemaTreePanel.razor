@@ -1,0 +1,679 @@
+@inject IDataManagerRepository Repository
+
+<div class="tree-panel">
+    <!-- Toolbar -->
+    <div class="tree-panel__toolbar">
+        <input type="text"
+               class="form-control form-control-sm"
+               placeholder="Search…"
+               value="@_searchFilter"
+               @oninput="HandleSearchInput" />
+        <div class="d-flex gap-1 mt-1">
+            <button class="btn btn-outline-secondary btn-sm flex-grow-1" @onclick="ExpandAll" title="Expand All">+</button>
+            <button class="btn btn-outline-secondary btn-sm flex-grow-1" @onclick="CollapseAll" title="Collapse All">−</button>
+            <button class="btn btn-outline-secondary btn-sm flex-grow-1" @onclick="Refresh" title="Refresh">↻</button>
+            <div class="form-check form-switch mt-1 ms-1 me-0">
+                <input class="form-check-input" type="checkbox" id="showInactiveToggle"
+                       checked="@_showInactive"
+                       @onchange="e => _showInactive = (bool)(e.Value ?? true)" />
+                <label class="form-check-label small text-nowrap" for="showInactiveToggle">Inactive</label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tree -->
+    <div class="tree-panel__scroll">
+        @if (_loading)
+        {
+            <div class="text-center py-3">
+                <div class="spinner-border spinner-border-sm" role="status"></div>
+                <span class="ms-2 small text-muted">Loading…</span>
+            </div>
+        }
+        else if (_error is not null)
+        {
+            <div class="alert alert-danger m-2 py-2 small">
+                @_error
+                <a href="#" class="ms-2" @onclick="Refresh" @onclick:preventDefault>Retry</a>
+            </div>
+        }
+        else if (_rootNodes.Count == 0)
+        {
+            <p class="text-muted small p-2">No servers found.</p>
+        }
+        else
+        {
+            @foreach (var node in _rootNodes)
+            {
+                <SchemaTreeNode Node="node"
+                                OnNodeSelected="HandleNodeSelected"
+                                OnToggleExpand="HandleToggleExpand"
+                                Depth="0"
+                                ShowInactive="@_showInactive"
+                                IsVisible="@IsNodeVisible(node)" />
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback<TreeNode> OnNodeSelected { get; set; }
+
+    private List<TreeNode> _rootNodes = new();
+    private string _searchFilter = string.Empty;
+    private bool _showInactive = true;
+    private TreeNode? _selectedNode;
+    private bool _loading = true;
+    private string? _error;
+
+    // For restoring expand state after clearing search
+    private HashSet<string> _preFilterExpandedIds = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRootAsync();
+    }
+
+    // ── Load root ────────────────────────────────────────────────────────────
+
+    private async Task LoadRootAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var sources = await Repository.GetSourcesAsync(includeInactive: true);
+            var dbs = await Repository.GetInScopeDatabasesAsync(includeInactive: true);
+            var dbsBySource = dbs.GroupBy(d => d.SourceId)
+                                 .ToDictionary(g => g.Key, g => g.Count());
+
+            _rootNodes = sources.Select(s =>
+            {
+                var count = dbsBySource.GetValueOrDefault(s.SourceId, 0);
+                return new TreeNode
+                {
+                    Id = $"server-{s.SourceId}",
+                    Label = s.ServerName,
+                    NodeType = TreeNodeType.Server,
+                    EntityId = s.SourceId,
+                    IsActive = s.IsActive,
+                    ChildCount = count,
+                    BadgeText = count > 0 ? count.ToString() : null
+                };
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load servers: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    // ── Node selection ───────────────────────────────────────────────────────
+
+    private async Task HandleNodeSelected(TreeNode node)
+    {
+        if (_selectedNode is not null) _selectedNode.IsSelected = false;
+        node.IsSelected = true;
+        _selectedNode = node;
+        await OnNodeSelected.InvokeAsync(node);
+    }
+
+    // ── Lazy-load expand/collapse ─────────────────────────────────────────────
+
+    private async Task HandleToggleExpand(TreeNode node)
+    {
+        if (node.IsExpanded)
+        {
+            node.IsExpanded = false;
+            return;
+        }
+
+        if (!node.ChildrenLoaded)
+        {
+            node.IsLoading = true;
+            StateHasChanged();
+            try
+            {
+                await LoadChildrenAsync(node);
+                node.ChildrenLoaded = true;
+            }
+            catch (Exception ex)
+            {
+                _error = $"Failed to expand '{node.Label}': {ex.Message}";
+            }
+            finally
+            {
+                node.IsLoading = false;
+            }
+        }
+
+        node.IsExpanded = true;
+    }
+
+    private async Task LoadChildrenAsync(TreeNode node)
+    {
+        switch (node.NodeType)
+        {
+            case TreeNodeType.Server:
+                await LoadDatabasesAsync(node);
+                break;
+
+            case TreeNodeType.Database:
+                await LoadDatabaseChildrenAsync(node);
+                break;
+
+            case TreeNodeType.Schema:
+                // Schema children are built by the parent Database loader; no further load needed
+                break;
+
+            case TreeNodeType.Table:
+                await LoadTableChildrenAsync(node);
+                break;
+
+            case TreeNodeType.View:
+                await LoadViewChildrenAsync(node);
+                break;
+
+            case TreeNodeType.StoredProcedure:
+                await LoadStoredProcedureChildrenAsync(node);
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    // ── Server → Databases ───────────────────────────────────────────────────
+
+    private async Task LoadDatabasesAsync(TreeNode serverNode)
+    {
+        var dbs = await Repository.GetInScopeDatabasesAsync(serverNode.EntityId, includeInactive: true);
+        serverNode.Children = dbs.Select(db => new TreeNode
+        {
+            Id = $"{serverNode.Id}/db-{db.DatabaseId}",
+            Label = db.DatabaseName,
+            NodeType = TreeNodeType.Database,
+            EntityId = db.DatabaseId,
+            ParentId = serverNode.Id,
+            IsActive = db.IsActive,
+            ChildCount = db.TableCount
+        }).ToList();
+
+        if (serverNode.Children.Count == 0)
+        {
+            // Keep ChildrenLoaded true but ensure IsExpanded still renders empty state
+        }
+    }
+
+    // ── Database → Schemas ───────────────────────────────────────────────────
+
+    private async Task LoadDatabaseChildrenAsync(TreeNode dbNode)
+    {
+        var dbId = dbNode.EntityId!.Value;
+
+        var (tables, views, procs, funcs) = await LoadDatabaseObjectsParallelAsync(dbId);
+
+        // Collect distinct schema names across all objects
+        var schemaNames = tables.Select(t => t.SchemaName)
+            .Concat(views.Select(v => v.SchemaName))
+            .Concat(procs.Select(p => p.SchemaName))
+            .Concat(funcs.Select(f => f.SchemaName))
+            .Distinct()
+            .OrderBy(s => s)
+            .ToList();
+
+        dbNode.Children = schemaNames.Select(schema =>
+        {
+            var schemaNode = new TreeNode
+            {
+                Id = $"{dbNode.Id}/schema-{schema}",
+                Label = schema,
+                NodeType = TreeNodeType.Schema,
+                ParentId = dbNode.Id,
+                IsActive = true,
+                ChildrenLoaded = true  // children built immediately below
+            };
+
+            schemaNode.Children = BuildSchemaCategoryNodes(schemaNode, schema, dbId, tables, views, procs, funcs);
+            return schemaNode;
+        }).ToList();
+    }
+
+    private async Task<(
+        IReadOnlyList<SourceTableInfo> tables,
+        IReadOnlyList<SourceViewSummary> views,
+        IReadOnlyList<SourceStoredProcedureSummary> procs,
+        IReadOnlyList<SourceFunctionSummary> funcs)>
+        LoadDatabaseObjectsParallelAsync(int dbId)
+    {
+        var tablesTask = Repository.GetInScopeTablesAsync(dbId, includeInactive: true);
+        var viewsTask = Repository.GetViewsAsync(dbId);
+        var procsTask = Repository.GetStoredProceduresAsync(dbId);
+        var funcsTask = Repository.GetFunctionsAsync(dbId);
+
+        await Task.WhenAll(tablesTask, viewsTask, procsTask, funcsTask);
+
+        return (tablesTask.Result, viewsTask.Result, procsTask.Result, funcsTask.Result);
+    }
+
+    private List<TreeNode> BuildSchemaCategoryNodes(
+        TreeNode schemaNode,
+        string schema,
+        int dbId,
+        IReadOnlyList<SourceTableInfo> allTables,
+        IReadOnlyList<SourceViewSummary> allViews,
+        IReadOnlyList<SourceStoredProcedureSummary> allProcs,
+        IReadOnlyList<SourceFunctionSummary> allFuncs)
+    {
+        var result = new List<TreeNode>();
+
+        var tables = allTables.Where(t => t.SchemaName == schema).ToList();
+        var views = allViews.Where(v => v.SchemaName == schema).ToList();
+        var procs = allProcs.Where(p => p.SchemaName == schema).ToList();
+        var funcs = allFuncs.Where(f => f.SchemaName == schema).ToList();
+
+        if (tables.Count > 0)
+        {
+            var catNode = MakeCategoryNode($"{schemaNode.Id}/tables", "Tables", TreeNodeType.TableCategory, schemaNode.Id, tables.Count);
+            catNode.Children = tables.Select(t => new TreeNode
+            {
+                Id = $"{schemaNode.Id}/table-{t.TableId}",
+                Label = t.TableName,
+                NodeType = TreeNodeType.Table,
+                EntityId = t.TableId,
+                ParentId = catNode.Id,
+                IsActive = t.IsActive
+            }).ToList();
+            catNode.ChildrenLoaded = true;
+            result.Add(catNode);
+        }
+
+        if (views.Count > 0)
+        {
+            var catNode = MakeCategoryNode($"{schemaNode.Id}/views", "Views", TreeNodeType.ViewCategory, schemaNode.Id, views.Count);
+            catNode.Children = views.Select(v => new TreeNode
+            {
+                Id = $"{schemaNode.Id}/view-{v.SourceViewId}",
+                Label = v.ViewName,
+                NodeType = TreeNodeType.View,
+                EntityId = v.SourceViewId,
+                ParentId = catNode.Id,
+                IsActive = v.IsActive
+            }).ToList();
+            catNode.ChildrenLoaded = true;
+            result.Add(catNode);
+        }
+
+        if (procs.Count > 0)
+        {
+            var catNode = MakeCategoryNode($"{schemaNode.Id}/procs", "Stored Procedures", TreeNodeType.StoredProcedureCategory, schemaNode.Id, procs.Count);
+            catNode.Children = procs.Select(p => new TreeNode
+            {
+                Id = $"{schemaNode.Id}/proc-{p.SourceStoredProcedureId}",
+                Label = p.ProcedureName,
+                NodeType = TreeNodeType.StoredProcedure,
+                EntityId = p.SourceStoredProcedureId,
+                ParentId = catNode.Id,
+                IsActive = p.IsActive
+            }).ToList();
+            catNode.ChildrenLoaded = true;
+            result.Add(catNode);
+        }
+
+        if (funcs.Count > 0)
+        {
+            var catNode = MakeCategoryNode($"{schemaNode.Id}/funcs", "Functions", TreeNodeType.FunctionCategory, schemaNode.Id, funcs.Count);
+            catNode.Children = funcs.Select(f => new TreeNode
+            {
+                Id = $"{schemaNode.Id}/func-{f.SourceFunctionId}",
+                Label = f.FunctionName,
+                NodeType = TreeNodeType.Function,
+                EntityId = f.SourceFunctionId,
+                ParentId = catNode.Id,
+                IsActive = f.IsActive
+            }).ToList();
+            catNode.ChildrenLoaded = true;
+            result.Add(catNode);
+        }
+
+        return result;
+    }
+
+    // ── Table → columns / indexes / FKs / constraints / triggers ─────────────
+
+    private async Task LoadTableChildrenAsync(TreeNode tableNode)
+    {
+        var tableId = tableNode.EntityId!.Value;
+
+        var columnsTask = Repository.GetColumnsAsync(tableId: tableId, includeInactive: true);
+        var indexesTask = Repository.GetIndexesAsync(tableId);
+        var fksTask = Repository.GetForeignKeysAsync(tableId);
+        var checksTask = Repository.GetCheckConstraintsAsync(tableId);
+        var uniquesTask = Repository.GetUniqueConstraintsAsync(tableId);
+        var triggersTask = Repository.GetTriggersAsync(tableId);
+
+        await Task.WhenAll(columnsTask, indexesTask, fksTask, checksTask, uniquesTask, triggersTask);
+
+        tableNode.Children = new List<TreeNode>();
+
+        // Columns
+        var columns = columnsTask.Result;
+        if (columns.Count > 0)
+        {
+            var cat = MakeCategoryNode($"{tableNode.Id}/cols", "Columns", TreeNodeType.ColumnCategory, tableNode.Id, columns.Count);
+            cat.Children = columns.OrderBy(c => c.SortOrder).Select(c => new TreeNode
+            {
+                Id = $"{tableNode.Id}/col-{c.ColumnId}",
+                Label = c.ColumnName,
+                NodeType = TreeNodeType.Column,
+                EntityId = c.ColumnId,
+                ParentId = cat.Id,
+                IsActive = c.IsActive
+            }).ToList();
+            cat.ChildrenLoaded = true;
+            tableNode.Children.Add(cat);
+        }
+
+        // Indexes
+        var indexes = indexesTask.Result;
+        if (indexes.Count > 0)
+        {
+            var cat = MakeCategoryNode($"{tableNode.Id}/idxs", "Indexes", TreeNodeType.IndexCategory, tableNode.Id, indexes.Count);
+            cat.Children = indexes.Select(i => new TreeNode
+            {
+                Id = $"{tableNode.Id}/idx-{i.SourceIndexId}",
+                Label = i.Name,
+                NodeType = TreeNodeType.Index,
+                EntityId = i.SourceIndexId,
+                ParentId = cat.Id,
+                IsActive = true
+            }).ToList();
+            cat.ChildrenLoaded = true;
+            tableNode.Children.Add(cat);
+        }
+
+        // Foreign Keys
+        var fks = fksTask.Result;
+        if (fks.Count > 0)
+        {
+            var cat = MakeCategoryNode($"{tableNode.Id}/fks", "Foreign Keys", TreeNodeType.ForeignKeyCategory, tableNode.Id, fks.Count);
+            cat.Children = fks.Select(fk => new TreeNode
+            {
+                Id = $"{tableNode.Id}/fk-{fk.SourceForeignKeyId}",
+                Label = fk.Name,
+                NodeType = TreeNodeType.ForeignKey,
+                EntityId = fk.SourceForeignKeyId,
+                ParentId = cat.Id,
+                IsActive = true
+            }).ToList();
+            cat.ChildrenLoaded = true;
+            tableNode.Children.Add(cat);
+        }
+
+        // Check Constraints
+        var checks = checksTask.Result;
+        if (checks.Count > 0)
+        {
+            var cat = MakeCategoryNode($"{tableNode.Id}/checks", "Check Constraints", TreeNodeType.CheckConstraintCategory, tableNode.Id, checks.Count);
+            cat.Children = checks.Select(c => new TreeNode
+            {
+                Id = $"{tableNode.Id}/chk-{c.SourceCheckConstraintId}",
+                Label = c.Name,
+                NodeType = TreeNodeType.CheckConstraint,
+                EntityId = c.SourceCheckConstraintId,
+                ParentId = cat.Id,
+                IsActive = c.IsActive
+            }).ToList();
+            cat.ChildrenLoaded = true;
+            tableNode.Children.Add(cat);
+        }
+
+        // Unique Constraints
+        var uniques = uniquesTask.Result;
+        if (uniques.Count > 0)
+        {
+            var cat = MakeCategoryNode($"{tableNode.Id}/uqs", "Unique Constraints", TreeNodeType.UniqueConstraintCategory, tableNode.Id, uniques.Count);
+            cat.Children = uniques.Select(u => new TreeNode
+            {
+                Id = $"{tableNode.Id}/uq-{u.SourceUniqueConstraintId}",
+                Label = u.Name,
+                NodeType = TreeNodeType.UniqueConstraint,
+                EntityId = u.SourceUniqueConstraintId,
+                ParentId = cat.Id,
+                IsActive = u.IsActive
+            }).ToList();
+            cat.ChildrenLoaded = true;
+            tableNode.Children.Add(cat);
+        }
+
+        // Triggers
+        var triggers = triggersTask.Result;
+        if (triggers.Count > 0)
+        {
+            var cat = MakeCategoryNode($"{tableNode.Id}/trigs", "Triggers", TreeNodeType.TriggerCategory, tableNode.Id, triggers.Count);
+            cat.Children = triggers.Select(t => new TreeNode
+            {
+                Id = $"{tableNode.Id}/trig-{t.SourceTriggerId}",
+                Label = t.TriggerName,
+                NodeType = TreeNodeType.Trigger,
+                EntityId = t.SourceTriggerId,
+                ParentId = cat.Id,
+                IsActive = t.IsActive
+            }).ToList();
+            cat.ChildrenLoaded = true;
+            tableNode.Children.Add(cat);
+        }
+    }
+
+    // ── View → ViewColumns ───────────────────────────────────────────────────
+
+    private async Task LoadViewChildrenAsync(TreeNode viewNode)
+    {
+        var detail = await Repository.GetViewByIdAsync(viewNode.EntityId!.Value);
+        if (detail is null) return;
+
+        viewNode.Children = detail.Columns.OrderBy(c => c.OrdinalPosition).Select(c => new TreeNode
+        {
+            Id = $"{viewNode.Id}/vcol-{c.SourceViewColumnId}",
+            Label = c.ColumnName,
+            NodeType = TreeNodeType.ViewColumn,
+            EntityId = c.SourceViewColumnId,
+            ParentId = viewNode.Id,
+            IsActive = true
+        }).ToList();
+    }
+
+    // ── StoredProcedure → Parameters ─────────────────────────────────────────
+
+    private async Task LoadStoredProcedureChildrenAsync(TreeNode procNode)
+    {
+        var detail = await Repository.GetStoredProcedureByIdAsync(procNode.EntityId!.Value);
+        if (detail is null) return;
+
+        procNode.Children = detail.Parameters.Select(p => new TreeNode
+        {
+            Id = $"{procNode.Id}/param-{p.SourceStoredProcedureParameterId}",
+            Label = p.Name,
+            NodeType = TreeNodeType.StoredProcedureParameter,
+            EntityId = p.SourceStoredProcedureParameterId,
+            ParentId = procNode.Id,
+            IsActive = true
+        }).ToList();
+    }
+
+    // ── Toolbar actions ──────────────────────────────────────────────────────
+
+    private void ExpandAll()
+    {
+        foreach (var node in _rootNodes)
+            SetExpandedAll(node, true);
+    }
+
+    private void CollapseAll()
+    {
+        foreach (var node in _rootNodes)
+            SetExpandedAll(node, false);
+    }
+
+    private void SetExpandedAll(TreeNode node, bool expanded)
+    {
+        if (node.ChildrenLoaded || node.Children.Count > 0)
+            node.IsExpanded = expanded;
+
+        foreach (var child in node.Children)
+            SetExpandedAll(child, expanded);
+    }
+
+    private async Task Refresh()
+    {
+        _rootNodes.Clear();
+        _searchFilter = string.Empty;
+        _error = null;
+        await LoadRootAsync();
+    }
+
+    // ── Search / filter ──────────────────────────────────────────────────────
+
+    private void HandleSearchInput(ChangeEventArgs e)
+    {
+        var newFilter = e.Value?.ToString() ?? string.Empty;
+
+        if (!string.IsNullOrWhiteSpace(_searchFilter) && string.IsNullOrWhiteSpace(newFilter))
+        {
+            // Clearing filter — restore saved expand state
+            RestoreExpandState(_rootNodes);
+        }
+        else if (string.IsNullOrWhiteSpace(_searchFilter) && !string.IsNullOrWhiteSpace(newFilter))
+        {
+            // Starting filter — save current expand state
+            _preFilterExpandedIds = new HashSet<string>();
+            CaptureExpandState(_rootNodes, _preFilterExpandedIds);
+        }
+
+        _searchFilter = newFilter;
+
+        if (!string.IsNullOrWhiteSpace(_searchFilter))
+            ApplySearchFilter(_rootNodes, _searchFilter);
+    }
+
+    private void CaptureExpandState(IEnumerable<TreeNode> nodes, HashSet<string> ids)
+    {
+        foreach (var node in nodes)
+        {
+            if (node.IsExpanded) ids.Add(node.Id);
+            CaptureExpandState(node.Children, ids);
+        }
+    }
+
+    private void RestoreExpandState(IEnumerable<TreeNode> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            node.IsExpanded = _preFilterExpandedIds.Contains(node.Id);
+            RestoreExpandState(node.Children);
+        }
+    }
+
+    /// <summary>
+    /// Returns true if any descendant of this node matches the filter.
+    /// Also sets IsExpanded on ancestors of matching nodes.
+    /// </summary>
+    private bool ApplySearchFilter(IEnumerable<TreeNode> nodes, string filter)
+    {
+        bool anyVisible = false;
+        foreach (var node in nodes)
+        {
+            bool selfMatches = node.Label.Contains(filter, StringComparison.OrdinalIgnoreCase);
+            bool childMatches = ApplySearchFilter(node.Children, filter);
+
+            if (selfMatches || childMatches)
+            {
+                if (childMatches) node.IsExpanded = true;
+                anyVisible = true;
+            }
+        }
+        return anyVisible;
+    }
+
+    private bool IsNodeVisible(TreeNode node)
+    {
+        if (string.IsNullOrWhiteSpace(_searchFilter)) return true;
+
+        return NodeOrDescendantMatches(node, _searchFilter);
+    }
+
+    private bool NodeOrDescendantMatches(TreeNode node, string filter)
+    {
+        if (node.Label.Contains(filter, StringComparison.OrdinalIgnoreCase)) return true;
+        return node.Children.Any(c => NodeOrDescendantMatches(c, filter));
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private static TreeNode MakeCategoryNode(string id, string label, TreeNodeType type, string parentId, int count)
+        => new TreeNode
+        {
+            Id = id,
+            Label = label,
+            NodeType = type,
+            ParentId = parentId,
+            ChildCount = count,
+            BadgeText = count > 0 ? count.ToString() : null,
+            IsActive = true
+        };
+
+    // Public method for SchemaBrowser to programmatically select a node
+    public async Task SelectNodeAsync(TreeNode node)
+    {
+        await HandleNodeSelected(node);
+        StateHasChanged();
+    }
+
+    // Public method for SchemaBrowser to trigger expand on a specific node by id
+    public async Task ExpandToNodeAsync(string nodeId)
+    {
+        // Walk the tree to find and expand the path to this node
+        await ExpandPathAsync(_rootNodes, nodeId);
+        StateHasChanged();
+    }
+
+    private async Task<bool> ExpandPathAsync(List<TreeNode> nodes, string targetId)
+    {
+        foreach (var node in nodes)
+        {
+            if (node.Id == targetId) return true;
+
+            if (targetId.StartsWith(node.Id))
+            {
+                if (!node.ChildrenLoaded)
+                    await HandleToggleExpand(node);
+                else
+                    node.IsExpanded = true;
+
+                if (await ExpandPathAsync(node.Children, targetId))
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    // Expose root nodes for deep-link loading from SchemaBrowser
+    public IReadOnlyList<TreeNode> RootNodes => _rootNodes;
+
+    public TreeNode? FindNodeById(string id) => FindNodeByIdIn(_rootNodes, id);
+
+    private static TreeNode? FindNodeByIdIn(IEnumerable<TreeNode> nodes, string id)
+    {
+        foreach (var node in nodes)
+        {
+            if (node.Id == id) return node;
+            var found = FindNodeByIdIn(node.Children, id);
+            if (found is not null) return found;
+        }
+        return null;
+    }
+}

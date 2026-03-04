@@ -1,0 +1,82 @@
+<div class="detail-panel">
+    @if (SelectedNode is null || IsCategory(SelectedNode.NodeType))
+    {
+        <div class="detail-panel__placeholder">
+            <p class="text-muted text-center mt-5">
+                <span style="font-size:2rem">🔍</span><br />
+                Select a node to view details
+            </p>
+        </div>
+    }
+    else
+    {
+        switch (SelectedNode.NodeType)
+        {
+            case TreeNodeType.Server:
+                <ServerDetail EntityId="SelectedNode.EntityId!.Value" />
+                break;
+            case TreeNodeType.Database:
+                <DatabaseDetail EntityId="SelectedNode.EntityId!.Value" />
+                break;
+            case TreeNodeType.Schema:
+                <SchemaSummaryDetail Node="SelectedNode" />
+                break;
+            case TreeNodeType.Table:
+                <TableDetail EntityId="SelectedNode.EntityId!.Value" />
+                break;
+            case TreeNodeType.Column:
+                <ColumnDetail EntityId="SelectedNode.EntityId!.Value" />
+                break;
+            case TreeNodeType.Index:
+                <IndexDetail Node="SelectedNode" />
+                break;
+            case TreeNodeType.ForeignKey:
+                <ForeignKeyDetail Node="SelectedNode" />
+                break;
+            case TreeNodeType.CheckConstraint:
+                <CheckConstraintDetail Node="SelectedNode" />
+                break;
+            case TreeNodeType.UniqueConstraint:
+                <UniqueConstraintDetail Node="SelectedNode" />
+                break;
+            case TreeNodeType.Trigger:
+                <TriggerDetailInline Node="SelectedNode" />
+                break;
+            case TreeNodeType.View:
+                <ViewDetailInline EntityId="SelectedNode.EntityId!.Value" />
+                break;
+            case TreeNodeType.StoredProcedure:
+                <StoredProcedureDetailInline EntityId="SelectedNode.EntityId!.Value" />
+                break;
+            case TreeNodeType.Function:
+                <FunctionDetailInline EntityId="SelectedNode.EntityId!.Value" />
+                break;
+            default:
+                <div class="detail-panel__placeholder">
+                    <p class="text-muted text-center mt-5">No detail view available for this node type.</p>
+                </div>
+                break;
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public TreeNode? SelectedNode { get; set; }
+
+    private static bool IsCategory(TreeNodeType t) => t is
+        TreeNodeType.ServerCategory or
+        TreeNodeType.DatabaseCategory or
+        TreeNodeType.SchemaCategory or
+        TreeNodeType.TableCategory or
+        TreeNodeType.ColumnCategory or
+        TreeNodeType.IndexCategory or
+        TreeNodeType.ForeignKeyCategory or
+        TreeNodeType.CheckConstraintCategory or
+        TreeNodeType.UniqueConstraintCategory or
+        TreeNodeType.TriggerCategory or
+        TreeNodeType.ViewCategory or
+        TreeNodeType.StoredProcedureCategory or
+        TreeNodeType.FunctionCategory or
+        TreeNodeType.ViewColumn or
+        TreeNodeType.StoredProcedureParameter;
+}

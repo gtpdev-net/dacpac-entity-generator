@@ -1,0 +1,91 @@
+@inject IDataManagerRepository Repository
+
+@if (_loading)
+{
+    <div class="spinner-border spinner-border-sm" role="status"></div>
+}
+else if (_table is null)
+{
+    <div class="alert alert-warning">Table not found.</div>
+}
+else
+{
+    <h5 class="d-flex justify-content-between align-items-center mb-3">
+        📄 <span class="text-muted fw-normal">[@_table.SchemaName].</span>@_table.TableName
+        <span class="badge @(_table.IsActive ? "text-bg-success" : "text-bg-secondary") fs-6">
+            @(_table.IsActive ? "Active" : "Inactive")
+        </span>
+    </h5>
+
+    @if (!string.IsNullOrWhiteSpace(_table.Notes))
+    {
+        <p class="text-muted small">@_table.Notes</p>
+    }
+
+    <table class="table table-sm table-borderless mb-3">
+        <tbody>
+            <tr><th class="text-muted fw-normal" style="width:180px">Estimated Rows</th>
+                <td>@(_table.EstimatedRowCount.HasValue ? _table.EstimatedRowCount.Value.ToString("N0") : "—")</td></tr>
+            <tr><th class="text-muted fw-normal">Columns</th><td>@_table.Columns.Count(c => c.IsActive)</td></tr>
+            <tr><th class="text-muted fw-normal">Indexes</th><td>@_table.Indexes.Count</td></tr>
+            <tr><th class="text-muted fw-normal">Foreign Keys</th><td>@_table.ForeignKeys.Count</td></tr>
+            <tr><th class="text-muted fw-normal">Check Constraints</th><td>@_table.CheckConstraints.Count</td></tr>
+            <tr><th class="text-muted fw-normal">Unique Constraints</th><td>@_table.UniqueConstraints.Count</td></tr>
+            <tr><th class="text-muted fw-normal">Triggers</th><td>@_table.Triggers.Count</td></tr>
+            <tr><th class="text-muted fw-normal">Created</th><td>@_table.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC</td></tr>
+        </tbody>
+    </table>
+
+    <!-- Column grid -->
+    @if (_table.Columns.Count > 0)
+    {
+        <h6>Columns</h6>
+        <table class="table table-sm table-bordered table-hover align-middle mb-3">
+            <thead class="table-light">
+                <tr>
+                    <th class="text-end" style="width:50px">#</th>
+                    <th>Column</th>
+                    <th>Type</th>
+                    <th style="width:70px">Nullable</th>
+                    <th style="width:60px">PK</th>
+                    <th style="width:70px">Active</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var col in _table.Columns.OrderBy(c => c.SortOrder))
+                {
+                    <tr>
+                        <td class="text-end text-muted">@col.SortOrder</td>
+                        <td><code>@col.ColumnName</code></td>
+                        <td>@col.SqlType</td>
+                        <td><FlagBadge Value="@col.IsNullable" /></td>
+                        <td><FlagBadge Value="@col.IsPrimaryKey" /></td>
+                        <td><FlagBadge Value="@col.IsActive" /></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <a class="btn btn-sm btn-outline-primary" href="/servers/@_sourceId/databases/@_table.DatabaseId/tables/@EntityId/edit">Open Full Page →</a>
+}
+
+@code {
+    [Parameter, EditorRequired] public int EntityId { get; set; }
+
+    private bool _loading = true;
+    private SourceTable? _table;
+    private int _sourceId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _table = await Repository.GetTableByIdAsync(EntityId);
+        if (_table is not null)
+        {
+            var db = await Repository.GetDatabaseByIdAsync(_table.DatabaseId);
+            _sourceId = db?.SourceId ?? 0;
+        }
+        _loading = false;
+    }
+}
