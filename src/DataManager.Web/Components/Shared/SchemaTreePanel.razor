@@ -250,14 +250,14 @@
         IReadOnlyList<SourceFunctionSummary> funcs)>
         LoadDatabaseObjectsParallelAsync(int dbId)
     {
-        var tablesTask = Repository.GetInScopeTablesAsync(dbId, includeInactive: true);
-        var viewsTask = Repository.GetViewsAsync(dbId);
-        var procsTask = Repository.GetStoredProceduresAsync(dbId);
-        var funcsTask = Repository.GetFunctionsAsync(dbId);
+        // Sequential awaits required — the repository uses a scoped DbContext
+        // which does not support concurrent operations.
+        var tables = await Repository.GetInScopeTablesAsync(dbId, includeInactive: true);
+        var views  = await Repository.GetViewsAsync(dbId);
+        var procs  = await Repository.GetStoredProceduresAsync(dbId);
+        var funcs  = await Repository.GetFunctionsAsync(dbId);
 
-        await Task.WhenAll(tablesTask, viewsTask, procsTask, funcsTask);
-
-        return (tablesTask.Result, viewsTask.Result, procsTask.Result, funcsTask.Result);
+        return (tables, views, procs, funcs);
     }
 
     private List<TreeNode> BuildSchemaCategoryNodes(
@@ -349,19 +349,18 @@
     {
         var tableId = tableNode.EntityId!.Value;
 
-        var columnsTask = Repository.GetColumnsAsync(tableId: tableId, includeInactive: true);
-        var indexesTask = Repository.GetIndexesAsync(tableId);
-        var fksTask = Repository.GetForeignKeysAsync(tableId);
-        var checksTask = Repository.GetCheckConstraintsAsync(tableId);
-        var uniquesTask = Repository.GetUniqueConstraintsAsync(tableId);
-        var triggersTask = Repository.GetTriggersAsync(tableId);
-
-        await Task.WhenAll(columnsTask, indexesTask, fksTask, checksTask, uniquesTask, triggersTask);
+        // Sequential awaits required — the repository uses a scoped DbContext
+        // which does not support concurrent operations.
+        var columns  = await Repository.GetColumnsAsync(tableId: tableId, includeInactive: true);
+        var indexes  = await Repository.GetIndexesAsync(tableId);
+        var fks      = await Repository.GetForeignKeysAsync(tableId);
+        var checks   = await Repository.GetCheckConstraintsAsync(tableId);
+        var uniques  = await Repository.GetUniqueConstraintsAsync(tableId);
+        var triggers = await Repository.GetTriggersAsync(tableId);
 
         tableNode.Children = new List<TreeNode>();
 
         // Columns
-        var columns = columnsTask.Result;
         if (columns.Count > 0)
         {
             var cat = MakeCategoryNode($"{tableNode.Id}/cols", "Columns", TreeNodeType.ColumnCategory, tableNode.Id, columns.Count);
@@ -379,7 +378,6 @@
         }
 
         // Indexes
-        var indexes = indexesTask.Result;
         if (indexes.Count > 0)
         {
             var cat = MakeCategoryNode($"{tableNode.Id}/idxs", "Indexes", TreeNodeType.IndexCategory, tableNode.Id, indexes.Count);
@@ -397,7 +395,6 @@
         }
 
         // Foreign Keys
-        var fks = fksTask.Result;
         if (fks.Count > 0)
         {
             var cat = MakeCategoryNode($"{tableNode.Id}/fks", "Foreign Keys", TreeNodeType.ForeignKeyCategory, tableNode.Id, fks.Count);
@@ -415,7 +412,6 @@
         }
 
         // Check Constraints
-        var checks = checksTask.Result;
         if (checks.Count > 0)
         {
             var cat = MakeCategoryNode($"{tableNode.Id}/checks", "Check Constraints", TreeNodeType.CheckConstraintCategory, tableNode.Id, checks.Count);
@@ -433,7 +429,6 @@
         }
 
         // Unique Constraints
-        var uniques = uniquesTask.Result;
         if (uniques.Count > 0)
         {
             var cat = MakeCategoryNode($"{tableNode.Id}/uqs", "Unique Constraints", TreeNodeType.UniqueConstraintCategory, tableNode.Id, uniques.Count);
@@ -451,7 +446,6 @@
         }
 
         // Triggers
-        var triggers = triggersTask.Result;
         if (triggers.Count > 0)
         {
             var cat = MakeCategoryNode($"{tableNode.Id}/trigs", "Triggers", TreeNodeType.TriggerCategory, tableNode.Id, triggers.Count);
