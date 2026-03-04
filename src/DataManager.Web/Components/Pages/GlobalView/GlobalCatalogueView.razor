@@ -73,8 +73,6 @@
 {
     <div class="alert alert-primary d-flex align-items-center gap-3 mb-3">
         <strong>@_selected.Count selected</strong>
-        <button class="btn btn-sm btn-outline-primary" @onclick='() => BulkSet("isInDaoAnalysis", true)'>Set DAO ✓</button>
-        <button class="btn btn-sm btn-outline-primary" @onclick='() => BulkSet("isAddedByApi", true)'>Set API ✓</button>
         <button class="btn btn-sm btn-outline-success" @onclick='() => BulkSet("isSelectedForLoad", true)'>Set For Load ✓</button>
         <button class="btn btn-sm btn-outline-warning" @onclick="SetTypeD">Set Type D</button>
         <button class="btn btn-sm btn-outline-info" @onclick="SetTypeB">Set Type B</button>
@@ -104,8 +102,6 @@ else
                     <th @onclick='() => Sort("table")' style="cursor:pointer">Table</th>
                     <th @onclick='() => Sort("column")' style="cursor:pointer">Column</th>
                     <th>Type</th>
-                    <th>DAO</th>
-                    <th>API</th>
                     <th>For Load</th>
                     <th>Modified</th>
                 </tr>
@@ -130,10 +126,6 @@ else
                                 <option value="B">B</option>
                             </select>
                         </td>
-                        <td><input type="checkbox" checked="@col.IsInDaoAnalysis"
-                                   @onchange="async () => await ToggleFlag(col, c => c.IsInDaoAnalysis = !c.IsInDaoAnalysis)" /></td>
-                        <td><input type="checkbox" checked="@col.IsAddedByApi"
-                                   @onchange="async () => await ToggleFlag(col, c => c.IsAddedByApi = !c.IsAddedByApi)" /></td>
                         <td><input type="checkbox" checked="@col.IsSelectedForLoad"
                                    @onchange="async () => await ToggleFlag(col, c => c.IsSelectedForLoad = !c.IsSelectedForLoad)" /></td>
                         <td class="small text-muted">@col.ModifiedAt?.ToString("dd MMM yy")</td>
@@ -190,9 +182,7 @@ else
         new("unreviewed", "Unreviewed"),
         new("inScope", "In Scope"),
         new("forLoad", "Selected for Load"),
-        new("docCols", "Document Columns"),
-        new("daoOnly", "DAO Only"),
-        new("apiAdded", "API Added")
+        new("docCols", "Document Columns")
     ];
 
     protected override async Task OnInitializedAsync()
@@ -229,8 +219,6 @@ else
         "inScope"    => q.Where(c => c.IsInDaoAnalysis || c.IsAddedByApi),
         "forLoad"    => q.Where(c => c.IsSelectedForLoad),
         "docCols"    => q.Where(c => c.PersistenceType == 'D' || c.PersistenceType == 'B'),
-        "daoOnly"    => q.Where(c => c.IsInDaoAnalysis),
-        "apiAdded"   => q.Where(c => c.IsAddedByApi),
         _            => q
     };
 
@@ -343,8 +331,6 @@ else
         {
             switch (field)
             {
-                case "isInDaoAnalysis":   c.IsInDaoAnalysis   = (bool)value; break;
-                case "isAddedByApi":      c.IsAddedByApi      = (bool)value; break;
                 case "isSelectedForLoad": c.IsSelectedForLoad = (bool)value; break;
                 case "persistenceType":   c.PersistenceType   = (char)value; break;
             }
