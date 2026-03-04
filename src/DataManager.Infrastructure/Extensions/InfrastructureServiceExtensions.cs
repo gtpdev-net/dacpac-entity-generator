@@ -21,6 +21,16 @@ public static class InfrastructureServiceExtensions
                 configuration.GetConnectionString("DataManagerDb"),
                 sql => sql.MigrationsAssembly(typeof(DataManagerDbContext).Assembly.FullName)));
 
+        // IDbContextFactory is used by EfDataManagerRepository so that each repository
+        // method gets its own short-lived DbContext, preventing concurrent-operation
+        // errors in Blazor Server where the scoped DbContext would otherwise be shared
+        // across all components in the same SignalR circuit.
+        services.AddDbContextFactory<DataManagerDbContext>(options =>
+            options.UseSqlServer(
+                configuration.GetConnectionString("DataManagerDb"),
+                sql => sql.MigrationsAssembly(typeof(DataManagerDbContext).Assembly.FullName)),
+            ServiceLifetime.Scoped);
+
         services.AddScoped<IDataManagerRepository, EfDataManagerRepository>();
 
         // Import services

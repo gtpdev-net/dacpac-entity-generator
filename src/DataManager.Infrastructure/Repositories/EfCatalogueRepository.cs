@@ -8,44 +8,51 @@ namespace DataManager.Infrastructure.Repositories;
 
 public class EfDataManagerRepository : IDataManagerRepository
 {
-    private readonly DataManagerDbContext _db;
+    private readonly IDbContextFactory<DataManagerDbContext> _factory;
 
-    public EfDataManagerRepository(DataManagerDbContext db)
+    public EfDataManagerRepository(IDbContextFactory<DataManagerDbContext> factory)
     {
-        _db = db;
+        _factory = factory;
     }
 
     // ── Sources ─────────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<Source>> GetSourcesAsync(bool includeInactive = false)
     {
-        var q = _db.Sources.AsQueryable();
+        using var db = _factory.CreateDbContext();
+        var q = db.Sources.AsQueryable();
         if (!includeInactive) q = q.Where(x => x.IsActive);
         return await q.OrderBy(x => x.ServerName).ToListAsync();
     }
 
-    public Task<Source?> GetSourceByIdAsync(int sourceId)
-        => _db.Sources.FirstOrDefaultAsync(x => x.SourceId == sourceId);
+    public async Task<Source?> GetSourceByIdAsync(int sourceId)
+    {
+        using var db = _factory.CreateDbContext();
+        return await db.Sources.FirstOrDefaultAsync(x => x.SourceId == sourceId);
+    }
 
     public async Task<Source> AddSourceAsync(Source source)
     {
-        _db.Sources.Add(source);
-        await _db.SaveChangesAsync();
+        using var db = _factory.CreateDbContext();
+        db.Sources.Add(source);
+        await db.SaveChangesAsync();
         return source;
     }
 
     public async Task UpdateSourceAsync(Source source)
     {
-        _db.Sources.Update(source);
-        await _db.SaveChangesAsync();
+        using var db = _factory.CreateDbContext();
+        db.Sources.Update(source);
+        await db.SaveChangesAsync();
     }
 
     public async Task DeleteSourceAsync(int sourceId)
     {
-        var entity = await _db.Sources.FindAsync(sourceId);
+        using var db = _factory.CreateDbContext();
+        var entity = await db.Sources.FindAsync(sourceId);
         if (entity is null) return;
-        _db.Sources.Remove(entity);
-        await _db.SaveChangesAsync();
+        db.Sources.Remove(entity);
+        await db.SaveChangesAsync();
     }
 
     // ── Databases ───────────────────────────────────────────────────────────
@@ -53,7 +60,8 @@ public class EfDataManagerRepository : IDataManagerRepository
     public async Task<IReadOnlyList<SourceDatabaseInfo>> GetInScopeDatabasesAsync(
         int? sourceId = null, bool includeInactive = false)
     {
-        var q = _db.SourceDatabases
+        using var db = _factory.CreateDbContext();
+        var q = db.SourceDatabases
             .Include(d => d.Source)
             .Include(d => d.Tables)
                 .ThenInclude(t => t.Columns)
@@ -83,28 +91,34 @@ public class EfDataManagerRepository : IDataManagerRepository
         }).OrderBy(d => d.ServerName).ThenBy(d => d.DatabaseName).ToListAsync();
     }
 
-    public Task<SourceDatabase?> GetDatabaseByIdAsync(int databaseId)
-        => _db.SourceDatabases.Include(d => d.Source).FirstOrDefaultAsync(x => x.DatabaseId == databaseId);
+    public async Task<SourceDatabase?> GetDatabaseByIdAsync(int databaseId)
+    {
+        using var db = _factory.CreateDbContext();
+        return await db.SourceDatabases.Include(d => d.Source).FirstOrDefaultAsync(x => x.DatabaseId == databaseId);
+    }
 
     public async Task<SourceDatabase> AddDatabaseAsync(SourceDatabase database)
     {
-        _db.SourceDatabases.Add(database);
-        await _db.SaveChangesAsync();
+        using var db = _factory.CreateDbContext();
+        db.SourceDatabases.Add(database);
+        await db.SaveChangesAsync();
         return database;
     }
 
     public async Task UpdateDatabaseAsync(SourceDatabase database)
     {
-        _db.SourceDatabases.Update(database);
-        await _db.SaveChangesAsync();
+        using var db = _factory.CreateDbContext();
+        db.SourceDatabases.Update(database);
+        await db.SaveChangesAsync();
     }
 
     public async Task DeleteDatabaseAsync(int databaseId)
     {
-        var entity = await _db.SourceDatabases.FindAsync(databaseId);
+        using var db = _factory.CreateDbContext();
+        var entity = await db.SourceDatabases.FindAsync(databaseId);
         if (entity is null) return;
-        _db.SourceDatabases.Remove(entity);
-        await _db.SaveChangesAsync();
+        db.SourceDatabases.Remove(entity);
+        await db.SaveChangesAsync();
     }
 
     // ── Tables ──────────────────────────────────────────────────────────────
@@ -112,7 +126,8 @@ public class EfDataManagerRepository : IDataManagerRepository
     public async Task<IReadOnlyList<SourceTableInfo>> GetInScopeTablesAsync(
         int? databaseId = null, bool includeInactive = false)
     {
-        var q = _db.SourceTables
+        using var db = _factory.CreateDbContext();
+        var q = db.SourceTables
             .Include(t => t.Database)
                 .ThenInclude(d => d.Source)
             .Include(t => t.Columns)
@@ -143,31 +158,37 @@ public class EfDataManagerRepository : IDataManagerRepository
           .ToListAsync();
     }
 
-    public Task<SourceTable?> GetTableByIdAsync(int tableId)
-        => _db.SourceTables
+    public async Task<SourceTable?> GetTableByIdAsync(int tableId)
+    {
+        using var db = _factory.CreateDbContext();
+        return await db.SourceTables
             .Include(t => t.Columns.OrderBy(c => c.SortOrder))
             .Include(t => t.Database).ThenInclude(d => d.Source)
             .FirstOrDefaultAsync(x => x.TableId == tableId);
+    }
 
     public async Task<SourceTable> AddTableAsync(SourceTable table)
     {
-        _db.SourceTables.Add(table);
-        await _db.SaveChangesAsync();
+        using var db = _factory.CreateDbContext();
+        db.SourceTables.Add(table);
+        await db.SaveChangesAsync();
         return table;
     }
 
     public async Task UpdateTableAsync(SourceTable table)
     {
-        _db.SourceTables.Update(table);
-        await _db.SaveChangesAsync();
+        using var db = _factory.CreateDbContext();
+        db.SourceTables.Update(table);
+        await db.SaveChangesAsync();
     }
 
     public async Task DeleteTableAsync(int tableId)
     {
-        var entity = await _db.SourceTables.FindAsync(tableId);
+        using var db = _factory.CreateDbContext();
+        var entity = await db.SourceTables.FindAsync(tableId);
         if (entity is null) return;
-        _db.SourceTables.Remove(entity);
-        await _db.SaveChangesAsync();
+        db.SourceTables.Remove(entity);
+        await db.SaveChangesAsync();
     }
 
     // ── Columns ─────────────────────────────────────────────────────────────
@@ -176,7 +197,8 @@ public class EfDataManagerRepository : IDataManagerRepository
         int? tableId = null, int? databaseId = null, int? sourceId = null,
         ColumnFilter filter = ColumnFilter.All, bool includeInactive = false)
     {
-        var q = _db.SourceColumns
+        using var db = _factory.CreateDbContext();
+        var q = db.SourceColumns
             .Include(c => c.Table)
                 .ThenInclude(t => t.Database)
                     .ThenInclude(d => d.Source)
@@ -224,61 +246,69 @@ public class EfDataManagerRepository : IDataManagerRepository
             }).ToListAsync();
     }
 
-    public Task<SourceColumn?> GetColumnByIdAsync(int columnId)
-        => _db.SourceColumns
+    public async Task<SourceColumn?> GetColumnByIdAsync(int columnId)
+    {
+        using var db = _factory.CreateDbContext();
+        return await db.SourceColumns
             .Include(c => c.Table).ThenInclude(t => t.Database).ThenInclude(d => d.Source)
             .FirstOrDefaultAsync(c => c.ColumnId == columnId);
+    }
 
     public async Task<SourceColumn> AddColumnAsync(SourceColumn column)
     {
-        _db.SourceColumns.Add(column);
-        await _db.SaveChangesAsync();
+        using var db = _factory.CreateDbContext();
+        db.SourceColumns.Add(column);
+        await db.SaveChangesAsync();
         return column;
     }
 
     public async Task UpdateColumnAsync(SourceColumn column)
     {
-        _db.SourceColumns.Update(column);
-        await _db.SaveChangesAsync();
+        using var db = _factory.CreateDbContext();
+        db.SourceColumns.Update(column);
+        await db.SaveChangesAsync();
     }
 
     public async Task DeleteColumnAsync(int columnId)
     {
-        var entity = await _db.SourceColumns.FindAsync(columnId);
+        using var db = _factory.CreateDbContext();
+        var entity = await db.SourceColumns.FindAsync(columnId);
         if (entity is null) return;
-        _db.SourceColumns.Remove(entity);
-        await _db.SaveChangesAsync();
+        db.SourceColumns.Remove(entity);
+        await db.SaveChangesAsync();
     }
 
     public async Task BulkUpdateColumnsAsync(IEnumerable<int> columnIds, Action<SourceColumn> updateAction)
     {
+        using var db = _factory.CreateDbContext();
         var ids = columnIds.ToList();
-        var columns = await _db.SourceColumns.Where(c => ids.Contains(c.ColumnId)).ToListAsync();
+        var columns = await db.SourceColumns.Where(c => ids.Contains(c.ColumnId)).ToListAsync();
         foreach (var col in columns) updateAction(col);
-        await _db.SaveChangesAsync();
+        await db.SaveChangesAsync();
     }
 
     // ── Summary ─────────────────────────────────────────────────────────────
 
     public async Task<DataManagerSummaryDto> GetDataManagerSummaryAsync()
     {
-        var lastCol = await _db.SourceColumns
+        using var db = _factory.CreateDbContext();
+        var lastCol = await db.SourceColumns
             .Where(c => c.ModifiedAt.HasValue)
             .OrderByDescending(c => c.ModifiedAt)
             .FirstOrDefaultAsync();
 
         return new DataManagerSummaryDto
         {
-            TotalServers = await _db.Sources.CountAsync(s => s.IsActive),
-            TotalDatabases = await _db.SourceDatabases.CountAsync(d => d.IsActive),
-            TotalTables = await _db.SourceTables.CountAsync(t => t.IsActive),
-            TotalColumns = await _db.SourceColumns.CountAsync(c => c.IsActive),
-            InScopeRelationalColumns = await _db.SourceColumns.CountAsync(c =>
+            TotalServers = await db.Sources.CountAsync(s => s.IsActive),
+            TotalDatabases = await db.SourceDatabases.CountAsync(d => d.IsActive),
+            TotalTables = await db.SourceTables.CountAsync(t => t.IsActive),
+            TotalColumns = await db.SourceColumns.CountAsync(c => c.IsActive),
+            InScopeRelationalColumns = await db.SourceColumns.CountAsync(c =>
                 c.IsActive && (c.IsInDaoAnalysis || c.IsAddedByApi) && c.PersistenceType == 'R'),
-            InScopeDocumentColumns = await _db.SourceColumns.CountAsync(c =>
+            InScopeDocumentColumns = await db.SourceColumns.CountAsync(c =>
                 c.IsActive && (c.IsInDaoAnalysis || c.IsAddedByApi) && c.PersistenceType == 'D'),
-            SelectedForLoadColumns = await _db.SourceColumns.CountAsync(c => c.IsActive && c.IsSelectedForLoad),
-            UnreviewedColumns = await _db.SourceColumns.CountAsync(c =>
+            SelectedForLoadColumns = await db.SourceColumns.CountAsync(c => c.IsActive && c.IsSelectedForLoad),
+            UnreviewedColumns = await db.SourceColumns.CountAsync(c =>
                 c.IsActive && !c.IsInDaoAnalysis && !c.IsAddedByApi && !c.IsSelectedForLoad),
             LastModifiedAt = lastCol?.ModifiedAt,
             LastModifiedBy = lastCol?.ModifiedBy
@@ -287,30 +317,43 @@ public class EfDataManagerRepository : IDataManagerRepository
 
     // ── Uniqueness checks ────────────────────────────────────────────────────
 
-    public Task<bool> ServerNameExistsAsync(string serverName, int? excludeSourceId = null)
-        => _db.Sources.AnyAsync(s =>
+    public async Task<bool> ServerNameExistsAsync(string serverName, int? excludeSourceId = null)
+    {
+        using var db = _factory.CreateDbContext();
+        return await db.Sources.AnyAsync(s =>
             s.ServerName == serverName && (excludeSourceId == null || s.SourceId != excludeSourceId.Value));
+    }
 
-    public Task<bool> DatabaseNameExistsAsync(int sourceId, string databaseName, int? excludeDatabaseId = null)
-        => _db.SourceDatabases.AnyAsync(d =>
+    public async Task<bool> DatabaseNameExistsAsync(int sourceId, string databaseName, int? excludeDatabaseId = null)
+    {
+        using var db = _factory.CreateDbContext();
+        return await db.SourceDatabases.AnyAsync(d =>
             d.SourceId == sourceId && d.DatabaseName == databaseName
             && (excludeDatabaseId == null || d.DatabaseId != excludeDatabaseId.Value));
+    }
 
-    public Task<bool> TableNameExistsAsync(int databaseId, string schemaName, string tableName, int? excludeTableId = null)
-        => _db.SourceTables.AnyAsync(t =>
+    public async Task<bool> TableNameExistsAsync(int databaseId, string schemaName, string tableName, int? excludeTableId = null)
+    {
+        using var db = _factory.CreateDbContext();
+        return await db.SourceTables.AnyAsync(t =>
             t.DatabaseId == databaseId && t.SchemaName == schemaName && t.TableName == tableName
             && (excludeTableId == null || t.TableId != excludeTableId.Value));
+    }
 
-    public Task<bool> ColumnNameExistsAsync(int tableId, string columnName, int? excludeColumnId = null)
-        => _db.SourceColumns.AnyAsync(c =>
+    public async Task<bool> ColumnNameExistsAsync(int tableId, string columnName, int? excludeColumnId = null)
+    {
+        using var db = _factory.CreateDbContext();
+        return await db.SourceColumns.AnyAsync(c =>
             c.TableId == tableId && c.ColumnName == columnName
             && (excludeColumnId == null || c.ColumnId != excludeColumnId.Value));
+    }
 
     // ── Views ────────────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<SourceViewSummary>> GetViewsAsync(int databaseId)
     {
-        return await _db.SourceViews
+        using var db = _factory.CreateDbContext();
+        return await db.SourceViews
             .Where(v => v.DatabaseId == databaseId && v.IsActive)
             .OrderBy(v => v.SchemaName).ThenBy(v => v.ViewName)
             .Select(v => new SourceViewSummary
@@ -327,7 +370,8 @@ public class EfDataManagerRepository : IDataManagerRepository
 
     public async Task<SourceViewDetail?> GetViewByIdAsync(int viewId)
     {
-        var v = await _db.SourceViews
+        using var db = _factory.CreateDbContext();
+        var v = await db.SourceViews
             .Include(x => x.Columns.OrderBy(c => c.OrdinalPosition))
             .FirstOrDefaultAsync(x => x.SourceViewId == viewId);
         if (v is null) return null;
@@ -358,7 +402,8 @@ public class EfDataManagerRepository : IDataManagerRepository
 
     public async Task<IReadOnlyList<SourceStoredProcedureSummary>> GetStoredProceduresAsync(int databaseId)
     {
-        return await _db.SourceStoredProcedures
+        using var db = _factory.CreateDbContext();
+        return await db.SourceStoredProcedures
             .Where(p => p.DatabaseId == databaseId && p.IsActive)
             .OrderBy(p => p.SchemaName).ThenBy(p => p.ProcedureName)
             .Select(p => new SourceStoredProcedureSummary
@@ -375,7 +420,8 @@ public class EfDataManagerRepository : IDataManagerRepository
 
     public async Task<SourceStoredProcedureDetail?> GetStoredProcedureByIdAsync(int id)
     {
-        var p = await _db.SourceStoredProcedures
+        using var db = _factory.CreateDbContext();
+        var p = await db.SourceStoredProcedures
             .Include(x => x.Parameters)
             .FirstOrDefaultAsync(x => x.SourceStoredProcedureId == id);
         if (p is null) return null;
@@ -402,7 +448,8 @@ public class EfDataManagerRepository : IDataManagerRepository
 
     public async Task<IReadOnlyList<SourceFunctionSummary>> GetFunctionsAsync(int databaseId)
     {
-        return await _db.SourceFunctions
+        using var db = _factory.CreateDbContext();
+        return await db.SourceFunctions
             .Where(f => f.DatabaseId == databaseId && f.IsActive)
             .OrderBy(f => f.SchemaName).ThenBy(f => f.FunctionName)
             .Select(f => new SourceFunctionSummary
@@ -420,7 +467,8 @@ public class EfDataManagerRepository : IDataManagerRepository
 
     public async Task<SourceFunctionDetail?> GetFunctionByIdAsync(int id)
     {
-        var f = await _db.SourceFunctions.FirstOrDefaultAsync(x => x.SourceFunctionId == id);
+        using var db = _factory.CreateDbContext();
+        var f = await db.SourceFunctions.FirstOrDefaultAsync(x => x.SourceFunctionId == id);
         if (f is null) return null;
         return new SourceFunctionDetail
         {
@@ -439,7 +487,8 @@ public class EfDataManagerRepository : IDataManagerRepository
 
     public async Task<IReadOnlyList<SourceTriggerSummary>> GetTriggersAsync(int tableId)
     {
-        return await _db.SourceTriggers
+        using var db = _factory.CreateDbContext();
+        return await db.SourceTriggers
             .Where(t => t.TableId == tableId && t.IsActive)
             .OrderBy(t => t.TriggerName)
             .Select(t => new SourceTriggerSummary
@@ -455,7 +504,8 @@ public class EfDataManagerRepository : IDataManagerRepository
 
     public async Task<IReadOnlyList<SourceTriggerDetail>> GetTriggerDetailsAsync(int tableId)
     {
-        return await _db.SourceTriggers
+        using var db = _factory.CreateDbContext();
+        return await db.SourceTriggers
             .Where(t => t.TableId == tableId && t.IsActive)
             .OrderBy(t => t.TriggerName)
             .Select(t => new SourceTriggerDetail
@@ -473,7 +523,8 @@ public class EfDataManagerRepository : IDataManagerRepository
 
     public async Task<IReadOnlyList<SourceIndexSummary>> GetIndexesAsync(int tableId)
     {
-        return await _db.SourceIndexes
+        using var db = _factory.CreateDbContext();
+        return await db.SourceIndexes
             .Include(i => i.Columns)
             .Where(i => i.TableId == tableId && i.IsActive)
             .OrderBy(i => i.Name)
@@ -494,7 +545,8 @@ public class EfDataManagerRepository : IDataManagerRepository
 
     public async Task<IReadOnlyList<SourceForeignKeySummary>> GetForeignKeysAsync(int tableId)
     {
-        return await _db.SourceForeignKeys
+        using var db = _factory.CreateDbContext();
+        return await db.SourceForeignKeys
             .Include(fk => fk.Columns.OrderBy(c => c.Ordinal))
             .Where(fk => fk.TableId == tableId && fk.IsActive)
             .OrderBy(fk => fk.Name)
@@ -520,7 +572,8 @@ public class EfDataManagerRepository : IDataManagerRepository
 
     public async Task<IReadOnlyList<SourceCheckConstraintSummary>> GetCheckConstraintsAsync(int tableId)
     {
-        return await _db.SourceCheckConstraints
+        using var db = _factory.CreateDbContext();
+        return await db.SourceCheckConstraints
             .Where(c => c.TableId == tableId && c.IsActive)
             .OrderBy(c => c.Name)
             .Select(c => new SourceCheckConstraintSummary
@@ -537,7 +590,8 @@ public class EfDataManagerRepository : IDataManagerRepository
 
     public async Task<IReadOnlyList<SourceUniqueConstraintSummary>> GetUniqueConstraintsAsync(int tableId)
     {
-        return await _db.SourceUniqueConstraints
+        using var db = _factory.CreateDbContext();
+        return await db.SourceUniqueConstraints
             .Include(uc => uc.Columns)
             .Where(uc => uc.TableId == tableId && uc.IsActive)
             .OrderBy(uc => uc.Name)
@@ -556,72 +610,78 @@ public class EfDataManagerRepository : IDataManagerRepository
 
     public async Task UpdateDatabaseHashAsync(int databaseId, string modelHash)
     {
-        var db = await _db.SourceDatabases.FindAsync(databaseId)
+        using var db = _factory.CreateDbContext();
+        var entity = await db.SourceDatabases.FindAsync(databaseId)
             ?? throw new InvalidOperationException($"SourceDatabase {databaseId} not found.");
 
-        db.LastImportedModelHash = modelHash;
-        db.LastImportedAt = DateTime.UtcNow;
-        db.ModifiedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
+        entity.LastImportedModelHash = modelHash;
+        entity.LastImportedAt = DateTime.UtcNow;
+        entity.ModifiedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
     }
 
     public async Task DeleteSchemaForDatabaseAsync(int databaseId)
     {
+        using var db = _factory.CreateDbContext();
         // Delete all schema objects for the given database — views, procs, functions
-        var views = _db.SourceViews.Where(v => v.DatabaseId == databaseId);
-        _db.SourceViews.RemoveRange(views);
+        var views = db.SourceViews.Where(v => v.DatabaseId == databaseId);
+        db.SourceViews.RemoveRange(views);
 
-        var procs = _db.SourceStoredProcedures.Where(p => p.DatabaseId == databaseId);
-        _db.SourceStoredProcedures.RemoveRange(procs);
+        var procs = db.SourceStoredProcedures.Where(p => p.DatabaseId == databaseId);
+        db.SourceStoredProcedures.RemoveRange(procs);
 
-        var funcs = _db.SourceFunctions.Where(f => f.DatabaseId == databaseId);
-        _db.SourceFunctions.RemoveRange(funcs);
+        var funcs = db.SourceFunctions.Where(f => f.DatabaseId == databaseId);
+        db.SourceFunctions.RemoveRange(funcs);
 
         // Delete table-level schema objects (indexes, FKs, constraints, triggers)
-        var tableIds = await _db.SourceTables
+        var tableIds = await db.SourceTables
             .Where(t => t.DatabaseId == databaseId)
             .Select(t => t.TableId)
             .ToListAsync();
 
         foreach (var tableId in tableIds)
         {
-            _db.SourceIndexes.RemoveRange(_db.SourceIndexes.Where(i => i.TableId == tableId));
-            _db.SourceForeignKeys.RemoveRange(_db.SourceForeignKeys.Where(fk => fk.TableId == tableId));
-            _db.SourceCheckConstraints.RemoveRange(_db.SourceCheckConstraints.Where(c => c.TableId == tableId));
-            _db.SourceUniqueConstraints.RemoveRange(_db.SourceUniqueConstraints.Where(u => u.TableId == tableId));
-            _db.SourceTriggers.RemoveRange(_db.SourceTriggers.Where(t => t.TableId == tableId));
+            db.SourceIndexes.RemoveRange(db.SourceIndexes.Where(i => i.TableId == tableId));
+            db.SourceForeignKeys.RemoveRange(db.SourceForeignKeys.Where(fk => fk.TableId == tableId));
+            db.SourceCheckConstraints.RemoveRange(db.SourceCheckConstraints.Where(c => c.TableId == tableId));
+            db.SourceUniqueConstraints.RemoveRange(db.SourceUniqueConstraints.Where(u => u.TableId == tableId));
+            db.SourceTriggers.RemoveRange(db.SourceTriggers.Where(t => t.TableId == tableId));
         }
 
-        await _db.SaveChangesAsync();
+        await db.SaveChangesAsync();
     }
 
     public async Task BulkInsertViewsAsync(IEnumerable<SourceView> views)
     {
-        _db.SourceViews.AddRange(views);
-        await _db.SaveChangesAsync();
+        using var db = _factory.CreateDbContext();
+        db.SourceViews.AddRange(views);
+        await db.SaveChangesAsync();
     }
 
     public async Task BulkInsertStoredProceduresAsync(IEnumerable<SourceStoredProcedure> procedures)
     {
-        _db.SourceStoredProcedures.AddRange(procedures);
-        await _db.SaveChangesAsync();
+        using var db = _factory.CreateDbContext();
+        db.SourceStoredProcedures.AddRange(procedures);
+        await db.SaveChangesAsync();
     }
 
     public async Task BulkInsertFunctionsAsync(IEnumerable<SourceFunction> functions)
     {
-        _db.SourceFunctions.AddRange(functions);
-        await _db.SaveChangesAsync();
+        using var db = _factory.CreateDbContext();
+        db.SourceFunctions.AddRange(functions);
+        await db.SaveChangesAsync();
     }
 
     public async Task BulkInsertTableSchemaAsync(int tableId, IEnumerable<SourceIndex> indexes,
         IEnumerable<SourceForeignKey> foreignKeys, IEnumerable<SourceCheckConstraint> checkConstraints,
         IEnumerable<SourceUniqueConstraint> uniqueConstraints, IEnumerable<SourceTrigger> triggers)
     {
-        _db.SourceIndexes.AddRange(indexes);
-        _db.SourceForeignKeys.AddRange(foreignKeys);
-        _db.SourceCheckConstraints.AddRange(checkConstraints);
-        _db.SourceUniqueConstraints.AddRange(uniqueConstraints);
-        _db.SourceTriggers.AddRange(triggers);
-        await _db.SaveChangesAsync();
+        using var db = _factory.CreateDbContext();
+        db.SourceIndexes.AddRange(indexes);
+        db.SourceForeignKeys.AddRange(foreignKeys);
+        db.SourceCheckConstraints.AddRange(checkConstraints);
+        db.SourceUniqueConstraints.AddRange(uniqueConstraints);
+        db.SourceTriggers.AddRange(triggers);
+        await db.SaveChangesAsync();
     }
 }
