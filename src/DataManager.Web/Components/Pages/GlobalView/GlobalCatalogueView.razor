@@ -2,7 +2,6 @@
 @rendermode InteractiveServer
 @inject IDataManagerRepository Repository
 @inject NavigationManager Nav
-@inject NotificationService Notify
 @inject IConfiguration Configuration
 
 <PageTitle>Migration Selection &mdash; @Configuration["AppTitle"] Migration</PageTitle>
@@ -11,6 +10,7 @@
 
 <!-- Filter bar -->
 <div class="card mb-3">
+    <div class="card-header fw-semibold">Filtration and Sorting</div>
     <div class="card-body">
         <div class="row g-2">
             <div class="col-md-2">
@@ -50,35 +50,8 @@
                     SelectedValuesChanged="v => { _selectedPersistence = v; _page = 1; }" />
             </div>
         </div>
-
-        <!-- Preset chips -->
-        <div class="mt-2 d-flex gap-2 flex-wrap">
-            @foreach (var preset in _presets)
-            {
-                <span class="badge @(ActivePreset == preset.Key ? "bg-primary text-white" : "preset-chip") fs-6"
-                      style="cursor:pointer" @onclick="() => ApplyPreset(preset.Key)">
-                    @preset.Label
-                </span>
-            }
-            @if (!string.IsNullOrEmpty(ActivePreset))
-            {
-                <span class="badge bg-secondary text-white fs-6" style="cursor:pointer" @onclick="ClearPresets">Clear</span>
-            }
-        </div>
     </div>
 </div>
-
-<!-- Bulk action toolbar -->
-@if (_selected.Count > 0)
-{
-    <div class="alert alert-primary d-flex align-items-center gap-3 mb-3">
-        <strong>@_selected.Count selected</strong>
-        <button class="btn btn-sm btn-outline-success" @onclick='() => BulkSet("isSelectedForLoad", true)'>Set For Load ✓</button>
-        <button class="btn btn-sm btn-outline-warning" @onclick="SetTypeD">Set Type D</button>
-        <button class="btn btn-sm btn-outline-info" @onclick="SetTypeB">Set Type B</button>
-        <button class="btn btn-sm btn-outline-secondary" @onclick="() => _selected.Clear()">Deselect All</button>
-    </div>
-}
 
 <div class="d-flex justify-content-between align-items-center mb-2">
     <span class="text-muted small">@Filtered.Count rows</span>
@@ -95,23 +68,20 @@ else
         <table class="table table-hover table-sm align-middle">
             <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
                 <tr>
-                    <th><input type="checkbox" @onchange="ToggleAll" /></th>
                     <th @onclick='() => Sort("server")' style="cursor:pointer">Server</th>
                     <th @onclick='() => Sort("database")' style="cursor:pointer">Database</th>
                     <th @onclick='() => Sort("schema")' style="cursor:pointer">Schema</th>
                     <th @onclick='() => Sort("table")' style="cursor:pointer">Table</th>
                     <th @onclick='() => Sort("column")' style="cursor:pointer">Column</th>
                     <th>Type</th>
-                    <th>For Load</th>
+                    <th>Migrate</th>
                     <th>Modified</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody style="font-family: Consolas, 'Courier New', monospace;">
                 @foreach (var col in Paged)
                 {
                     <tr>
-                        <td><input type="checkbox" checked="@_selected.Contains(col.ColumnId)"
-                                   @onchange="() => ToggleSelect(col.ColumnId)" /></td>
                         <td class="small">@col.ServerName</td>
                         <td class="small">@col.DatabaseName</td>
                         <td class="small">@col.SchemaName</td>
@@ -126,7 +96,7 @@ else
                                 <option value="B">B</option>
                             </select>
                         </td>
-                        <td><input type="checkbox" checked="@col.IsSelectedForLoad"
+                        <td><input type="checkbox" title="Selected for migration" checked="@col.IsSelectedForLoad"
                                    @onchange="async () => await ToggleFlag(col, c => c.IsSelectedForLoad = !c.IsSelectedForLoad)" /></td>
                         <td class="small text-muted">@col.ModifiedAt?.ToString("dd MMM yy")</td>
                     </tr>
@@ -158,8 +128,6 @@ else
     </div>
 }
 
-<ConfirmDialog @ref="_confirmDialog" Title="Bulk Update" ConfirmText="Apply" />
-
 @code {
     private List<SourceColumnInfo>? _all;
     private HashSet<string> _selectedServers     = new(StringComparer.OrdinalIgnoreCase);
@@ -172,19 +140,6 @@ else
     private bool _sortAsc = true;
     private int _page = 1;
     private const int PageSize = 50;
-    private HashSet<int> _selected = new();
-    private string ActivePreset = string.Empty;
-    private ConfirmDialog _confirmDialog = null!;
-
-    private record PresetDef(string Key, string Label);
-    private static readonly PresetDef[] _presets =
-    [
-        new("unreviewed", "Unreviewed"),
-        new("inScope", "In Scope"),
-        new("forLoad", "Selected for Load"),
-        new("docCols", "Document Columns")
-    ];
-
     protected override async Task OnInitializedAsync()
     {
         var cols = await Repository.GetColumnsAsync(filter: ColumnFilter.All);
@@ -210,17 +165,8 @@ else
         if (excludeField != "table"       && _selectedTables.Count > 0)      q = q.Where(c => _selectedTables.Contains(c.TableName));
         if (excludeField != "column"      && _selectedColumns.Count > 0)     q = q.Where(c => _selectedColumns.Contains(c.ColumnName));
         if (excludeField != "persistence" && _selectedPersistence.Count > 0) q = q.Where(c => _selectedPersistence.Contains(c.PersistenceType.ToString()));
-        return ApplyPresetFilter(q);
+        return q;
     }
-
-    private IEnumerable<SourceColumnInfo> ApplyPresetFilter(IEnumerable<SourceColumnInfo> q) => ActivePreset switch
-    {
-        "unreviewed" => q.Where(c => !c.IsInDaoAnalysis && !c.IsAddedByApi),
-        "inScope"    => q.Where(c => c.IsInDaoAnalysis || c.IsAddedByApi),
-        "forLoad"    => q.Where(c => c.IsSelectedForLoad),
-        "docCols"    => q.Where(c => c.PersistenceType == 'D' || c.PersistenceType == 'B'),
-        _            => q
-    };
 
     private List<SourceColumnInfo> Filtered
     {
@@ -234,7 +180,6 @@ else
             if (_selectedTables.Count > 0)      q = q.Where(c => _selectedTables.Contains(c.TableName));
             if (_selectedColumns.Count > 0)     q = q.Where(c => _selectedColumns.Contains(c.ColumnName));
             if (_selectedPersistence.Count > 0) q = q.Where(c => _selectedPersistence.Contains(c.PersistenceType.ToString()));
-            q = ApplyPresetFilter(q);
             return ApplySort(q.ToList());
         }
     }
@@ -267,42 +212,6 @@ else
         _page = 1;
     }
 
-    private void ToggleSelect(int id)
-    {
-        if (!_selected.Add(id)) _selected.Remove(id);
-    }
-
-    private void ToggleAll()
-    {
-        if (_selected.Count > 0) _selected.Clear();
-        else _selected = Paged.Select(c => c.ColumnId).ToHashSet();
-    }
-
-    private void ApplyPreset(string key)
-    {
-        ActivePreset = ActivePreset == key ? "" : key;
-        // Clear all multi-select filters when switching presets so the preset is the sole constraint
-        _selectedServers     = new(StringComparer.OrdinalIgnoreCase);
-        _selectedDatabases   = new(StringComparer.OrdinalIgnoreCase);
-        _selectedSchemas     = new(StringComparer.OrdinalIgnoreCase);
-        _selectedTables      = new(StringComparer.OrdinalIgnoreCase);
-        _selectedColumns     = new(StringComparer.OrdinalIgnoreCase);
-        _selectedPersistence = new(StringComparer.OrdinalIgnoreCase);
-        _page = 1;
-    }
-
-    private void ClearPresets()
-    {
-        ActivePreset = "";
-        _selectedServers     = new(StringComparer.OrdinalIgnoreCase);
-        _selectedDatabases   = new(StringComparer.OrdinalIgnoreCase);
-        _selectedSchemas     = new(StringComparer.OrdinalIgnoreCase);
-        _selectedTables      = new(StringComparer.OrdinalIgnoreCase);
-        _selectedColumns     = new(StringComparer.OrdinalIgnoreCase);
-        _selectedPersistence = new(StringComparer.OrdinalIgnoreCase);
-        _page = 1;
-    }
-
     private async Task ToggleFlag(SourceColumnInfo info, Action<SourceColumn> toggle)
     {
         await Repository.BulkUpdateColumnsAsync(new[] { info.ColumnId }, toggle);
@@ -321,30 +230,6 @@ else
         info.PersistenceType = type;
     }
 
-    private async Task BulkSet(string field, object value)
-    {
-        if (_selected.Count == 0) return;
-        var ok = await _confirmDialog.ShowAsync($"Apply to {_selected.Count} selected columns?");
-        if (!ok) return;
-
-        await Repository.BulkUpdateColumnsAsync(_selected, c =>
-        {
-            switch (field)
-            {
-                case "isSelectedForLoad": c.IsSelectedForLoad = (bool)value; break;
-                case "persistenceType":   c.PersistenceType   = (char)value; break;
-            }
-        });
-
-        Notify.Success($"Updated {_selected.Count} columns.");
-        _selected.Clear();
-        var cols = await Repository.GetColumnsAsync(filter: ColumnFilter.All);
-        _all = cols.ToList();
-    }
-
-    private Task SetTypeD() => BulkSet("persistenceType", (object)'D');
-    private Task SetTypeB() => BulkSet("persistenceType", (object)'B');
-
     private void ExportCsv()
     {
         // CSV export handled via a streaming endpoint; pass active filter values as comma-separated query params
@@ -354,7 +239,6 @@ else
                        $"&schema={Join(_selectedSchemas)}" +
                        $"&table={Join(_selectedTables)}" +
                        $"&column={Join(_selectedColumns)}" +
-                       $"&persistence={Join(_selectedPersistence)}" +
-                       $"&preset={Uri.EscapeDataString(ActivePreset)}");
+                       $"&persistence={Join(_selectedPersistence)}");
     }
 }
