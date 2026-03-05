@@ -84,7 +84,7 @@ else
         if (_table is not null)
         {
             var db = await Repository.GetDatabaseByIdAsync(_table.DatabaseId);
-            _sourceId = db?.SourceId ?? 0;
+            _sourceId = db?.ServerId ?? 0;
         }
         _loading = false;
     }

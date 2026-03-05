@@ -1,5 +1,5 @@
-@page "/servers/{SourceId:int}/databases/{DatabaseId:int}/tables/new"
-@page "/servers/{SourceId:int}/databases/{DatabaseId:int}/tables/{TableId:int}/edit"
+@page "/servers/{ServerId:int}/databases/{DatabaseId:int}/tables/new"
+@page "/servers/{ServerId:int}/databases/{DatabaseId:int}/tables/{TableId:int}/edit"
 @rendermode InteractiveServer
 @inject IDataManagerRepository Repository
 @inject NavigationManager Nav
@@ -107,7 +107,7 @@
 
     <div class="col-12 mt-2">
         <button type="submit" class="btn btn-primary me-2">Save</button>
-        <a href="/servers/@SourceId/databases/@DatabaseId/tables" class="btn btn-secondary">Cancel</a>
+        <a href="/servers/@ServerId/databases/@DatabaseId/tables" class="btn btn-secondary">Cancel</a>
     </div>
 
     @if (!_isNew)
@@ -329,7 +329,7 @@
                         <h6 class="d-flex align-items-center gap-2">
                             <code>[@trig.SchemaName].[@trig.TriggerName]</code>
                             <FlagBadge Value="@trig.IsActive" />
-                            <a href="/servers/@SourceId/databases/@DatabaseId/tables/@TableId/triggers/@trig.SourceTriggerId"
+                            <a href="/servers/@ServerId/databases/@DatabaseId/tables/@TableId/triggers/@trig.SourceTriggerId"
                                class="btn btn-sm btn-outline-primary ms-auto">Full View</a>
                         </h6>
                         <SqlCodeBlock SqlBody="@trig.SqlBody" />
@@ -341,7 +341,7 @@
 }
 
 @code {
-    [Parameter] public int SourceId { get; set; }
+    [Parameter] public int ServerId { get; set; }
     [Parameter] public int DatabaseId { get; set; }
     [Parameter] public int? TableId { get; set; }
 
@@ -367,13 +367,13 @@
     {
         var db = await Repository.GetDatabaseByIdAsync(DatabaseId);
         var databaseName = db?.DatabaseName ?? DatabaseId.ToString();
-        var serverName = db?.Source.ServerName ?? SourceId.ToString();
+        var serverName = db?.Server.ServerName ?? ServerId.ToString();
 
         _breadcrumbs =
         [
             new BreadcrumbItem("Servers", "/servers"),
-            new BreadcrumbItem(serverName, $"/servers/{SourceId}/databases"),
-            new BreadcrumbItem(databaseName, $"/servers/{SourceId}/databases/{DatabaseId}/tables"),
+            new BreadcrumbItem(serverName, $"/servers/{ServerId}/databases"),
+            new BreadcrumbItem(databaseName, $"/servers/{ServerId}/databases/{DatabaseId}/tables"),
             new BreadcrumbItem(_isNew ? "New Table" : "Edit Table", isActive: true)
         ];
 
@@ -457,6 +457,6 @@
             await Repository.UpdateTableAsync(_table);
 
         Notify.Success("Table saved.");
-        Nav.NavigateTo($"/servers/{SourceId}/databases/{DatabaseId}/tables");
+        Nav.NavigateTo($"/servers/{ServerId}/databases/{DatabaseId}/tables");
     }
 }

@@ -74,7 +74,7 @@ else
         if (_view is not null)
         {
             var db = await Repository.GetDatabaseByIdAsync(_view.DatabaseId);
-            _sourceId = db?.SourceId;
+            _sourceId = db?.ServerId;
         }
         _loading = false;
     }

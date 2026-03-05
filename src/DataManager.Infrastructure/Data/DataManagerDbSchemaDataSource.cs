@@ -50,7 +50,7 @@ public class DataManagerDbSchemaDataSource : ISchemaDataSource
         if (db == null)
             return new List<TableDefinition>();
 
-        var serverName   = db.Source?.ServerName ?? string.Empty;
+        var serverName   = db.Server?.ServerName ?? string.Empty;
         var databaseName = db.DatabaseName;
 
         var tableInfoList = await _repo.GetInScopeTablesAsync(databaseId);
@@ -109,7 +109,7 @@ public class DataManagerDbSchemaDataSource : ISchemaDataSource
         if (db == null)
             return new List<ViewDefinition>();
 
-        var serverName   = db.Source?.ServerName ?? string.Empty;
+        var serverName   = db.Server?.ServerName ?? string.Empty;
         var databaseName = db.DatabaseName;
 
         var viewSummaries = await _repo.GetViewsAsync(databaseId);
@@ -194,7 +194,7 @@ public class DataManagerDbSchemaDataSource : ISchemaDataSource
         if (db == null)
             return new ElementDiscoveryReport();
 
-        var serverName   = db.Source?.ServerName ?? string.Empty;
+        var serverName   = db.Server?.ServerName ?? string.Empty;
         var databaseName = db.DatabaseName;
         var location     = $"[{serverName}].[{databaseName}]";
 

@@ -67,7 +67,7 @@ else
         if (_proc is not null)
         {
             var db = await Repository.GetDatabaseByIdAsync(_proc.DatabaseId);
-            _sourceId = db?.SourceId;
+            _sourceId = db?.ServerId;
         }
         _loading = false;
     }

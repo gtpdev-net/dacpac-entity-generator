@@ -122,16 +122,36 @@ else
                         <td class="small">@row.SourceSchema</td>
                         <td class="small">@row.SourceTableName</td>
                         <td>
-                            <input type="text" class="form-control form-control-sm"
-                                   style="min-width:130px"
-                                   value="@row.DestinationServer"
-                                   @onchange="async e => await SaveTextField(row, r => r.DestinationServer = e.Value?.ToString(), e.Value?.ToString())" />
+                            <select class="form-select form-select-sm" style="min-width:150px"
+                                    value="@row.DestinationServer"
+                                    @onchange="async e => await SaveTextField(row, r => r.DestinationServer = e.Value?.ToString(), e.Value?.ToString())">
+                                <option value="">— none —</option>
+                                @foreach (var srv in _targetServers)
+                                {
+                                    <option value="@srv.ServerName">@srv.ServerName</option>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(row.DestinationServer) &&
+                                     !_targetServers.Any(s => string.Equals(s.ServerName, row.DestinationServer, StringComparison.OrdinalIgnoreCase)))
+                                {
+                                    <option value="@row.DestinationServer">@row.DestinationServer ⚠</option>
+                                }
+                            </select>
                         </td>
                         <td>
-                            <input type="text" class="form-control form-control-sm"
-                                   style="min-width:130px"
-                                   value="@row.DestinationDatabase"
-                                   @onchange="async e => await SaveTextField(row, r => r.DestinationDatabase = e.Value?.ToString(), e.Value?.ToString())" />
+                            <select class="form-select form-select-sm" style="min-width:150px"
+                                    value="@row.DestinationDatabase"
+                                    @onchange="async e => await SaveTextField(row, r => r.DestinationDatabase = e.Value?.ToString(), e.Value?.ToString())">
+                                <option value="">— none —</option>
+                                @foreach (var tdb in GetTargetDbs(row.DestinationServer))
+                                {
+                                    <option value="@tdb.DatabaseName">@tdb.DatabaseName</option>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(row.DestinationDatabase) &&
+                                     !GetTargetDbs(row.DestinationServer).Any(d => string.Equals(d.DatabaseName, row.DestinationDatabase, StringComparison.OrdinalIgnoreCase)))
+                                {
+                                    <option value="@row.DestinationDatabase">@row.DestinationDatabase ⚠</option>
+                                }
+                            </select>
                         </td>
                         <td class="small">@row.DestinationSchema</td>
                         <td class="small">@row.DestinationTable</td>
@@ -189,6 +209,8 @@ else
 
 @code {
     private List<MigrationConfigInfo>? _all;
+    private List<Server> _targetServers = new();
+    private List<TargetDatabase> _targetDatabases = new();
     private bool _loading;
     private MigrationConfigLoadResult? _loadResult;
 
@@ -213,6 +235,21 @@ else
     {
         var items = await Repository.GetMigrationConfigsAsync(includeInactive: true);
         _all = items.ToList();
+
+        var targets = await Repository.GetServersByRoleAsync(ServerRole.Target, includeInactive: false);
+        _targetServers = targets.ToList();
+
+        var targetDbs = await Repository.GetTargetDatabasesAsync(includeInactive: false);
+        _targetDatabases = targetDbs.ToList();
+    }
+
+    private IEnumerable<TargetDatabase> GetTargetDbs(string? serverName)
+    {
+        if (string.IsNullOrWhiteSpace(serverName)) return [];
+        var src = _targetServers.FirstOrDefault(s =>
+            string.Equals(s.ServerName, serverName, StringComparison.OrdinalIgnoreCase));
+        if (src is null) return [];
+        return _targetDatabases.Where(d => d.ServerId == src.ServerId);
     }
 
     // ── Available options (cascade: each field excludes its own filter) ──────

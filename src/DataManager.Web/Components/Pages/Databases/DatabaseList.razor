@@ -1,4 +1,4 @@
-@page "/servers/{SourceId:int}/databases"
+@page "/servers/{ServerId:int}/databases"
 @rendermode InteractiveServer
 @inject IDataManagerRepository Repository
 @inject NotificationService Notify
@@ -10,7 +10,7 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1>Databases — @_serverName</h1>
-    <a href="/servers/@SourceId/databases/new" class="btn btn-primary">Add Database</a>
+    <a href="/servers/@ServerId/databases/new" class="btn btn-primary">Add Database</a>
 </div>
 
 @if (_databases is null)
@@ -30,16 +30,16 @@ else
             <th></th>
         </HeaderTemplate>
         <RowTemplate Context="db">
-            <td><a href="/servers/@SourceId/databases/@db.DatabaseId/tables">@db.DatabaseName</a></td>
+            <td><a href="/servers/@ServerId/databases/@db.DatabaseId/tables">@db.DatabaseName</a></td>
             <td>@db.Description</td>
             <td>@db.TableCount</td>
             <td>@db.InScopeColumnCount</td>
             <td>@db.SelectedForLoadCount</td>
             <td><FlagBadge Value="@db.IsActive" /></td>
             <td class="text-nowrap">
-                <a href="/servers/@SourceId/databases/@db.DatabaseId/schema"
+                <a href="/servers/@ServerId/databases/@db.DatabaseId/schema"
                    class="btn btn-sm btn-outline-info me-1">Schema</a>
-                <a href="/servers/@SourceId/databases/@db.DatabaseId/edit"
+                <a href="/servers/@ServerId/databases/@db.DatabaseId/edit"
                    class="btn btn-sm btn-outline-secondary">Edit</a>
             </td>
         </RowTemplate>
@@ -47,7 +47,7 @@ else
 }
 
 @code {
-    [Parameter] public int SourceId { get; set; }
+    [Parameter] public int ServerId { get; set; }
 
     private List<SourceDatabaseInfo>? _databases;
     private string _serverName = string.Empty;
@@ -55,8 +55,8 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
-        var source = await Repository.GetSourceByIdAsync(SourceId);
-        _serverName = source?.ServerName ?? SourceId.ToString();
+        var source = await Repository.GetServerByIdAsync(ServerId);
+        _serverName = source?.ServerName ?? ServerId.ToString();
 
         _breadcrumbs =
         [
@@ -64,7 +64,7 @@ else
             new BreadcrumbItem(_serverName, isActive: true)
         ];
 
-        var dbs = await Repository.GetInScopeDatabasesAsync(sourceId: SourceId, includeInactive: true);
+        var dbs = await Repository.GetInScopeDatabasesAsync(serverId: ServerId, includeInactive: true);
         _databases = dbs.ToList();
     }
 }

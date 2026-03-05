@@ -40,13 +40,13 @@ else
     [Parameter, EditorRequired] public int EntityId { get; set; }
 
     private bool _loading = true;
-    private Source? _source;
+    private Server? _source;
     private int _dbCount;
 
     protected override async Task OnParametersSetAsync()
     {
         _loading = true;
-        _source = await Repository.GetSourceByIdAsync(EntityId);
+        _source = await Repository.GetServerByIdAsync(EntityId);
         var dbs = await Repository.GetInScopeDatabasesAsync(EntityId, includeInactive: true);
         _dbCount = dbs.Count;
         _loading = false;

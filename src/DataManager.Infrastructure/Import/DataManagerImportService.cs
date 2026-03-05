@@ -36,28 +36,28 @@ public class DataManagerImportService
 
         foreach (var grp in grouped)
         {
-            // Ensure Source
-            var source = await _db.Sources
+            // Ensure Server
+            var source = await _db.Servers
                 .FirstOrDefaultAsync(s => s.ServerName == grp.Key.ServerName);
             if (source is null)
             {
-                source = new Source { ServerName = grp.Key.ServerName, IsActive = true };
-                if (!dryRun) _db.Sources.Add(source);
+                source = new Server { ServerName = grp.Key.ServerName, IsActive = true };
+                if (!dryRun) _db.Servers.Add(source);
                 result.TablesAdded++; // count as new
             }
 
             // Ensure SourceDatabase
             SourceDatabase? database = null;
-            if (!dryRun || source.SourceId > 0)
+            if (!dryRun || source.ServerId > 0)
             {
                 database = await _db.SourceDatabases
-                    .FirstOrDefaultAsync(d => d.SourceId == source.SourceId && d.DatabaseName == grp.Key.DatabaseName);
+                    .FirstOrDefaultAsync(d => d.ServerId == source.ServerId && d.DatabaseName == grp.Key.DatabaseName);
             }
             if (database is null)
             {
                 database = new SourceDatabase
                 {
-                    Source     = source,
+                    Server       = source,
                     DatabaseName = grp.Key.DatabaseName,
                     IsActive     = true
                 };
@@ -66,7 +66,7 @@ public class DataManagerImportService
 
             // Ensure SourceTable
             SourceTable? table = null;
-            if (!dryRun || (source.SourceId > 0 && database.DatabaseId > 0))
+            if (!dryRun || (source.ServerId > 0 && database.DatabaseId > 0))
             {
                 table = await _db.SourceTables
                     .Include(t => t.Columns)

@@ -1,4 +1,4 @@
-@page "/servers/{SourceId:int}/databases/{DatabaseId:int}/schema/functions/{FunctionId:int}"
+@page "/servers/{ServerId:int}/databases/{DatabaseId:int}/schema/functions/{FunctionId:int}"
 @rendermode InteractiveServer
 @inject IDataManagerRepository Repository
 @inject IConfiguration Configuration
@@ -44,7 +44,7 @@ else
 }
 
 @code {
-    [Parameter] public int SourceId { get; set; }
+    [Parameter] public int ServerId { get; set; }
     [Parameter] public int DatabaseId { get; set; }
     [Parameter] public int FunctionId { get; set; }
 
@@ -60,16 +60,16 @@ else
 
         var db = await Repository.GetDatabaseByIdAsync(DatabaseId);
         _databaseName = db?.DatabaseName ?? DatabaseId.ToString();
-        _serverName = db?.Source.ServerName ?? SourceId.ToString();
+        _serverName = db?.Server.ServerName ?? ServerId.ToString();
 
         _function = await Repository.GetFunctionByIdAsync(FunctionId);
 
         _breadcrumbs =
         [
             new BreadcrumbItem("Servers", "/servers"),
-            new BreadcrumbItem(_serverName, $"/servers/{SourceId}/databases"),
-            new BreadcrumbItem(_databaseName, $"/servers/{SourceId}/databases/{DatabaseId}/tables"),
-            new BreadcrumbItem("Schema", $"/servers/{SourceId}/databases/{DatabaseId}/schema"),
+            new BreadcrumbItem(_serverName, $"/servers/{ServerId}/databases"),
+            new BreadcrumbItem(_databaseName, $"/servers/{ServerId}/databases/{DatabaseId}/tables"),
+            new BreadcrumbItem("Schema", $"/servers/{ServerId}/databases/{DatabaseId}/schema"),
             new BreadcrumbItem(_function is null ? "Function" : $"{_function.SchemaName}.{_function.FunctionName}", isActive: true)
         ];
 

@@ -1,4 +1,4 @@
-@page "/servers/{SourceId:int}/databases/{DatabaseId:int}/tables/{TableId:int}/triggers/{TriggerId:int}"
+@page "/servers/{ServerId:int}/databases/{DatabaseId:int}/tables/{TableId:int}/triggers/{TriggerId:int}"
 @rendermode InteractiveServer
 @inject IDataManagerRepository Repository
 @inject IConfiguration Configuration
@@ -28,7 +28,7 @@ else
 
     <div class="mb-3">
         <span class="text-muted small me-2">Parent Table:</span>
-        <a href="/servers/@SourceId/databases/@DatabaseId/tables/@TableId/edit">
+        <a href="/servers/@ServerId/databases/@DatabaseId/tables/@TableId/edit">
             @_tableName
         </a>
     </div>
@@ -38,7 +38,7 @@ else
 }
 
 @code {
-    [Parameter] public int SourceId { get; set; }
+    [Parameter] public int ServerId { get; set; }
     [Parameter] public int DatabaseId { get; set; }
     [Parameter] public int TableId { get; set; }
     [Parameter] public int TriggerId { get; set; }
@@ -59,7 +59,7 @@ else
         var triggers = await Repository.GetTriggerDetailsAsync(TableId);
 
         _databaseName = db?.DatabaseName ?? DatabaseId.ToString();
-        _serverName   = db?.Source.ServerName ?? SourceId.ToString();
+        _serverName   = db?.Server.ServerName ?? ServerId.ToString();
         _tableName    = table is null ? TableId.ToString()
                         : $"[{table.SchemaName}].[{table.TableName}]";
 
@@ -68,9 +68,9 @@ else
         _breadcrumbs =
         [
             new BreadcrumbItem("Servers", "/servers"),
-            new BreadcrumbItem(_serverName, $"/servers/{SourceId}/databases"),
-            new BreadcrumbItem(_databaseName, $"/servers/{SourceId}/databases/{DatabaseId}/tables"),
-            new BreadcrumbItem(_tableName, $"/servers/{SourceId}/databases/{DatabaseId}/tables/{TableId}/edit"),
+            new BreadcrumbItem(_serverName, $"/servers/{ServerId}/databases"),
+            new BreadcrumbItem(_databaseName, $"/servers/{ServerId}/databases/{DatabaseId}/tables"),
+            new BreadcrumbItem(_tableName, $"/servers/{ServerId}/databases/{DatabaseId}/tables/{TableId}/edit"),
             new BreadcrumbItem(_trigger is null ? "Trigger" : _trigger.TriggerName, isActive: true)
         ];
 

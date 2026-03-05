@@ -17,19 +17,21 @@
            @bind="_search" @bind:event="oninput" />
 </div>
 
-@if (_sources is null)
+@if (_servers is null)
 {
     <div class="spinner-border" role="status"></div>
 }
 else
 {
-    var filtered = _sources
+    var filtered = _servers
         .Where(s => string.IsNullOrWhiteSpace(_search) || s.ServerName.Contains(_search, StringComparison.OrdinalIgnoreCase))
         .ToList();
 
-    <PaginatedTable TItem="Source" Items="filtered" PageSize="25">
+    <PaginatedTable TItem="Server" Items="filtered" PageSize="25">
         <HeaderTemplate>
             <th>Server Name</th>
+            <th>Role</th>
+            <th>Connection</th>
             <th>Description</th>
             <th># Databases</th>
             <th>Active</th>
@@ -37,16 +39,54 @@ else
             <th></th>
         </HeaderTemplate>
         <RowTemplate Context="src">
-            <td><a href="/servers/@src.SourceId/databases">@src.ServerName</a></td>
+            <td>
+                @if (src.Role == DataManager.Core.Models.Entities.ServerRole.Target)
+                {
+                    <a href="/servers/@src.ServerId/target-databases">@src.ServerName</a>
+                }
+                else
+                {
+                    <a href="/servers/@src.ServerId/databases">@src.ServerName</a>
+                }
+            </td>
+            <td>
+                @if (src.Role == DataManager.Core.Models.Entities.ServerRole.Target)
+                {
+                    <span class="badge bg-warning text-dark">Target</span>
+                }
+                else
+                {
+                    <span class="badge bg-primary">Source</span>
+                }
+            </td>
+            <td class="text-muted small">
+                @if (src.Connection is not null && !string.IsNullOrWhiteSpace(src.Connection.Hostname))
+                {
+                    @src.Connection.Hostname
+                }
+                else
+                {
+                    <span class="fst-italic">Not configured</span>
+                }
+            </td>
             <td>@src.Description</td>
-            <td>@src.Databases.Count(d => d.IsActive)</td>
+            <td>
+                @if (src.Role == DataManager.Core.Models.Entities.ServerRole.Target)
+                {
+                    @src.TargetDatabases.Count(d => d.IsActive)
+                }
+                else
+                {
+                    @src.Databases.Count(d => d.IsActive)
+                }
+            </td>
             <td>
                 <input type="checkbox" checked="@src.IsActive"
                        @onchange="() => ToggleActive(src)" />
             </td>
             <td>@(src.ModifiedAt?.ToString("dd MMM yyyy") ?? src.CreatedAt.ToString("dd MMM yyyy"))</td>
             <td>
-                <a href="/servers/@src.SourceId/edit" class="btn btn-sm btn-outline-secondary me-1">Edit</a>
+                <a href="/servers/@src.ServerId/edit" class="btn btn-sm btn-outline-secondary me-1">Edit</a>
                 <button class="btn btn-sm btn-outline-danger"
                         @onclick="() => Delete(src)">Delete</button>
             </td>
@@ -58,24 +98,24 @@ else
                ConfirmText="Delete" />
 
 @code {
-    private List<Source>? _sources;
+    private List<Server>? _servers;
     private string _search = string.Empty;
     private ConfirmDialog _confirmDialog = null!;
 
     protected override async Task OnInitializedAsync()
     {
-        var list = await Repository.GetSourcesAsync(includeInactive: true);
-        _sources = list.ToList();
+        var list = await Repository.GetServersAsync(includeInactive: true);
+        _servers = list.ToList();
     }
 
-    private async Task ToggleActive(Source src)
+    private async Task ToggleActive(Server src)
     {
         src.IsActive = !src.IsActive;
-        await Repository.UpdateSourceAsync(src);
+        await Repository.UpdateServerAsync(src);
         Notify.Success($"'{src.ServerName}' is now {(src.IsActive ? "active" : "inactive")}.");
     }
 
-    private async Task Delete(Source src)
+    private async Task Delete(Server src)
     {
         if (src.Databases.Any(d => d.IsActive))
         {
@@ -85,8 +125,8 @@ else
         var ok = await _confirmDialog.ShowAsync(
             $"Permanently delete server '{src.ServerName}'?");
         if (!ok) return;
-        await Repository.DeleteSourceAsync(src.SourceId);
-        _sources!.Remove(src);
+        await Repository.DeleteServerAsync(src.ServerId);
+        _servers!.Remove(src);
         Notify.Success($"Server '{src.ServerName}' deleted.");
     }
 }

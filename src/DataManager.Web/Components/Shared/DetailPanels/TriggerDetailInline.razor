@@ -67,7 +67,7 @@ else
             _tableName = $"[{table.SchemaName}].[{table.TableName}]";
             _databaseId = table.DatabaseId;
             var db = await Repository.GetDatabaseByIdAsync(table.DatabaseId);
-            _sourceId = db?.SourceId;
+            _sourceId = db?.ServerId;
         }
 
         _loading = false;

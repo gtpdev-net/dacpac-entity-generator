@@ -1,16 +1,16 @@
-@page "/servers/{ServerId:int}/databases/new"
-@page "/servers/{ServerId:int}/databases/{DatabaseId:int}/edit"
+@page "/servers/{ServerId:int}/target-databases/new"
+@page "/servers/{ServerId:int}/target-databases/{DatabaseId:int}/edit"
 @rendermode InteractiveServer
 @inject IDataManagerRepository Repository
 @inject NavigationManager Nav
 @inject NotificationService Notify
 @inject IConfiguration Configuration
 
-<PageTitle>@(_isNew ? "New Database" : "Edit Database") &mdash; @Configuration["AppTitle"] Migration</PageTitle>
+<PageTitle>@(_isNew ? "New Destination Database" : "Edit Destination Database") &mdash; @Configuration["AppTitle"] Migration</PageTitle>
 
 <BreadcrumbNav Items="@_breadcrumbs" />
 
-<h2>@(_isNew ? "New Database" : "Edit Database")</h2>
+<h2>@(_isNew ? "New Destination Database" : "Edit Destination Database")</h2>
 
 <EditForm Model="_model" OnValidSubmit="Save" class="row g-3" style="max-width:600px;">
     <DataAnnotationsValidator />
@@ -36,7 +36,7 @@
     </div>
     <div class="col-12">
         <button type="submit" class="btn btn-primary me-2">Save</button>
-        <a href="/servers/@ServerId/databases" class="btn btn-secondary">Cancel</a>
+        <a href="/servers/@ServerId/target-databases" class="btn btn-secondary">Cancel</a>
     </div>
 
     @if (!_isNew)
@@ -50,7 +50,7 @@
     [Parameter] public int ServerId { get; set; }
     [Parameter] public int? DatabaseId { get; set; }
 
-    private SourceDatabase _model = new() { IsActive = true };
+    private TargetDatabase _model = new() { IsActive = true };
     private bool _nameExists;
     private bool _isNew => DatabaseId == null;
     private IEnumerable<BreadcrumbItem> _breadcrumbs = [];
@@ -63,13 +63,13 @@
         _breadcrumbs =
         [
             new BreadcrumbItem("Servers", "/servers"),
-            new BreadcrumbItem(serverName, $"/servers/{ServerId}/databases"),
+            new BreadcrumbItem(serverName, $"/servers/{ServerId}/target-databases"),
             new BreadcrumbItem(_isNew ? "New" : "Edit", isActive: true)
         ];
 
         if (DatabaseId.HasValue)
         {
-            var existing = await Repository.GetDatabaseByIdAsync(DatabaseId.Value);
+            var existing = await Repository.GetTargetDatabaseByIdAsync(DatabaseId.Value);
             if (existing is not null) _model = existing;
         }
         else
@@ -80,17 +80,20 @@
 
     private async Task Save()
     {
-        _nameExists = await Repository.DatabaseNameExistsAsync(
+        _nameExists = await Repository.TargetDatabaseNameExistsAsync(
             ServerId, _model.DatabaseName,
-            _isNew ? null : DatabaseId);
+            _isNew ? null : _model.TargetDatabaseId);
         if (_nameExists) return;
 
         if (_isNew)
-            await Repository.AddDatabaseAsync(_model);
+            await Repository.AddTargetDatabaseAsync(_model);
         else
-            await Repository.UpdateDatabaseAsync(_model);
+        {
+            _model.ModifiedAt = DateTime.UtcNow;
+            await Repository.UpdateTargetDatabaseAsync(_model);
+        }
 
         Notify.Success("Database saved.");
-        Nav.NavigateTo($"/servers/{ServerId}/databases");
+        Nav.NavigateTo($"/servers/{ServerId}/target-databases");
     }
 }

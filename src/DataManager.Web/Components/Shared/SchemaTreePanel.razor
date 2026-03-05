@@ -82,20 +82,20 @@
         _error = null;
         try
         {
-            var sources = await Repository.GetSourcesAsync(includeInactive: true);
+            var sources = await Repository.GetServersAsync(includeInactive: true);
             var dbs = await Repository.GetInScopeDatabasesAsync(includeInactive: true);
-            var dbsBySource = dbs.GroupBy(d => d.SourceId)
+            var dbsBySource = dbs.GroupBy(d => d.ServerId)
                                  .ToDictionary(g => g.Key, g => g.Count());
 
             _rootNodes = sources.Select(s =>
             {
-                var count = dbsBySource.GetValueOrDefault(s.SourceId, 0);
+                var count = dbsBySource.GetValueOrDefault(s.ServerId, 0);
                 return new TreeNode
                 {
-                    Id = $"server-{s.SourceId}",
+                    Id = $"server-{s.ServerId}",
                     Label = s.ServerName,
                     NodeType = TreeNodeType.Server,
-                    EntityId = s.SourceId,
+                    EntityId = s.ServerId,
                     IsActive = s.IsActive,
                     ChildCount = count,
                     BadgeText = count > 0 ? count.ToString() : null

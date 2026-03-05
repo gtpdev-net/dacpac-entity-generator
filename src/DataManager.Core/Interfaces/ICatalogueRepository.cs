@@ -1,5 +1,6 @@
 using DataManager.Core.DTOs;
 using DataManager.Core.Models.Entities;
+using DataManager.Core.Models.StoredProcedures;
 
 namespace DataManager.Core.Interfaces;
 
@@ -13,15 +14,28 @@ public enum ColumnFilter
 
 public interface IDataManagerRepository
 {
-    // --- Sources ---
-    Task<IReadOnlyList<Source>> GetSourcesAsync(bool includeInactive = false);
-    Task<Source?> GetSourceByIdAsync(int sourceId);
-    Task<Source> AddSourceAsync(Source source);
-    Task UpdateSourceAsync(Source source);
-    Task DeleteSourceAsync(int sourceId);
+    // --- Servers ---
+    Task<IReadOnlyList<Server>> GetServersAsync(bool includeInactive = false);
+    Task<IReadOnlyList<Server>> GetServersByRoleAsync(ServerRole role, bool includeInactive = false);
+    Task<Server?> GetServerByIdAsync(int serverId);
+    Task<Server> AddServerAsync(Server server);
+    Task UpdateServerAsync(Server server);
+    Task DeleteServerAsync(int serverId);
+
+    // --- Server Connections ---
+    Task<ServerConnection?> GetServerConnectionAsync(int serverId);
+    Task SaveServerConnectionAsync(ServerConnection connection);
+
+    // --- Target Databases ---
+    Task<IReadOnlyList<TargetDatabase>> GetTargetDatabasesAsync(int? serverId = null, bool includeInactive = false);
+    Task<TargetDatabase?> GetTargetDatabaseByIdAsync(int id);
+    Task<TargetDatabase> AddTargetDatabaseAsync(TargetDatabase db);
+    Task UpdateTargetDatabaseAsync(TargetDatabase db);
+    Task DeleteTargetDatabaseAsync(int id);
+    Task<bool> TargetDatabaseNameExistsAsync(int serverId, string name, int? excludeId = null);
 
     // --- Databases ---
-    Task<IReadOnlyList<SourceDatabaseInfo>> GetInScopeDatabasesAsync(int? sourceId = null, bool includeInactive = false);
+    Task<IReadOnlyList<SourceDatabaseInfo>> GetInScopeDatabasesAsync(int? serverId = null, bool includeInactive = false);
     Task<SourceDatabase?> GetDatabaseByIdAsync(int databaseId);
     Task<SourceDatabase> AddDatabaseAsync(SourceDatabase database);
     Task UpdateDatabaseAsync(SourceDatabase database);
@@ -38,7 +52,7 @@ public interface IDataManagerRepository
     Task<IReadOnlyList<SourceColumnInfo>> GetColumnsAsync(
         int? tableId = null,
         int? databaseId = null,
-        int? sourceId = null,
+        int? serverId = null,
         ColumnFilter filter = ColumnFilter.All,
         bool includeInactive = false);
     Task<SourceColumn?> GetColumnByIdAsync(int columnId);
@@ -51,8 +65,8 @@ public interface IDataManagerRepository
     Task<DataManagerSummaryDto> GetDataManagerSummaryAsync();
 
     // --- Uniqueness checks ---
-    Task<bool> ServerNameExistsAsync(string serverName, int? excludeSourceId = null);
-    Task<bool> DatabaseNameExistsAsync(int sourceId, string databaseName, int? excludeDatabaseId = null);
+    Task<bool> ServerNameExistsAsync(string serverName, int? excludeServerId = null);
+    Task<bool> DatabaseNameExistsAsync(int serverId, string databaseName, int? excludeDatabaseId = null);
     Task<bool> TableNameExistsAsync(int databaseId, string schemaName, string tableName, int? excludeTableId = null);
     Task<bool> ColumnNameExistsAsync(int tableId, string columnName, int? excludeColumnId = null);
 
@@ -101,5 +115,9 @@ public interface IDataManagerRepository
     Task UpdateMigrationConfigAsync(MigrationConfig config);
     Task DeleteMigrationConfigAsync(int id);
     Task BulkUpsertMigrationConfigsAsync(IEnumerable<MigrationConfig> configs);
+
+    // --- CopyActivityLog ---
+    Task LogCopySuccessAsync(LogCopySuccessParams parameters);
+    Task LogCopyFailureAsync(LogCopyFailureParams parameters);
 }
 

@@ -148,19 +148,26 @@ public class DacpacSchemaImportService
             foreach (var t in tables)
                 _pkEnricher.EnrichTableWithPrimaryKeys(t);
 
-            // ── 2. Find or create Source ──────────────────────────────────────
-            var sources = await _repository.GetSourcesAsync(includeInactive: true);
+            // ── 2. Find or create Server ──────────────────────────────────
+            var sources = await _repository.GetServersAsync(includeInactive: true);
             var source = sources.FirstOrDefault(s =>
                 string.Equals(s.ServerName, serverName, StringComparison.OrdinalIgnoreCase));
 
             if (source is null)
             {
-                source = await _repository.AddSourceAsync(new Source { ServerName = serverName });
-                _logger.LogProgress($"Created new Source: {serverName}");
+                source = await _repository.AddServerAsync(new Server { ServerName = serverName });
+                _logger.LogProgress($"Created new Server: {serverName}");
+            }
+            else if (source.Role == ServerRole.Target)
+            {
+                result.Errors.Add(
+                    $"Server '{serverName}' is configured as a Target server and cannot be used for DACPAC schema import. " +
+                    "Change the server role to Source before importing.");
+                return result;
             }
 
             // ── 3. Find or create SourceDatabase ─────────────────────────────
-            var databases = await _repository.GetInScopeDatabasesAsync(source.SourceId, includeInactive: true);
+            var databases = await _repository.GetInScopeDatabasesAsync(source.ServerId, includeInactive: true);
             var dbInfo = databases.FirstOrDefault(d =>
                 string.Equals(d.DatabaseName, databaseName, StringComparison.OrdinalIgnoreCase));
 
@@ -169,7 +176,7 @@ public class DacpacSchemaImportService
             {
                 var newDb = await _repository.AddDatabaseAsync(new SourceDatabase
                 {
-                    SourceId = source.SourceId,
+                    ServerId = source.ServerId,
                     DatabaseName = databaseName
                 });
                 databaseId = newDb.DatabaseId;

@@ -3,7 +3,7 @@ namespace DataManager.Core.DTOs;
 public class SourceDatabaseInfo
 {
     public int DatabaseId { get; set; }
-    public int SourceId { get; set; }
+    public int ServerId { get; set; }
     public string ServerName { get; set; } = string.Empty;
     public string DatabaseName { get; set; } = string.Empty;
     public string? Description { get; set; }
@@ -300,5 +300,11 @@ public class MigrationConfigLoadResult
     public int Updated { get; set; }
     public int Unchanged { get; set; }
     public int TotalTablesEvaluated { get; set; }
+}
+
+public class TargetServerOption
+{
+    public int ServerId { get; set; }
+    public string ServerName { get; set; } = string.Empty;
 }
 

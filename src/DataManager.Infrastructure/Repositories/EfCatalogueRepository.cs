@@ -1,7 +1,9 @@
 using DataManager.Core.DTOs;
 using DataManager.Core.Interfaces;
 using DataManager.Core.Models.Entities;
+using DataManager.Core.Models.StoredProcedures;
 using DataManager.Infrastructure.Data;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace DataManager.Infrastructure.Repositories;
@@ -15,66 +17,162 @@ public class EfDataManagerRepository : IDataManagerRepository
         _factory = factory;
     }
 
-    // ── Sources ─────────────────────────────────────────────────────────────
+    // ── Servers ─────────────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<Source>> GetSourcesAsync(bool includeInactive = false)
+    public async Task<IReadOnlyList<Server>> GetServersAsync(bool includeInactive = false)
     {
         using var db = _factory.CreateDbContext();
-        var q = db.Sources.AsQueryable();
+        var q = db.Servers
+            .Include(s => s.Connection)
+            .Include(s => s.TargetDatabases)
+            .AsQueryable();
         if (!includeInactive) q = q.Where(x => x.IsActive);
         return await q.OrderBy(x => x.ServerName).ToListAsync();
     }
 
-    public async Task<Source?> GetSourceByIdAsync(int sourceId)
+    public async Task<IReadOnlyList<Server>> GetServersByRoleAsync(ServerRole role, bool includeInactive = false)
     {
         using var db = _factory.CreateDbContext();
-        return await db.Sources.FirstOrDefaultAsync(x => x.SourceId == sourceId);
+        var q = db.Servers
+            .Include(s => s.Connection)
+            .Include(s => s.TargetDatabases)
+            .Where(x => x.Role == role)
+            .AsQueryable();
+        if (!includeInactive) q = q.Where(x => x.IsActive);
+        return await q.OrderBy(x => x.ServerName).ToListAsync();
     }
 
-    public async Task<Source> AddSourceAsync(Source source)
+    public async Task<Server?> GetServerByIdAsync(int serverId)
     {
         using var db = _factory.CreateDbContext();
-        db.Sources.Add(source);
+        return await db.Servers.Include(s => s.Connection).FirstOrDefaultAsync(x => x.ServerId == serverId);
+    }
+
+    public async Task<Server> AddServerAsync(Server server)
+    {
+        using var db = _factory.CreateDbContext();
+        db.Servers.Add(server);
         await db.SaveChangesAsync();
-        return source;
+        return server;
     }
 
-    public async Task UpdateSourceAsync(Source source)
+    public async Task UpdateServerAsync(Server server)
     {
         using var db = _factory.CreateDbContext();
-        db.Sources.Update(source);
+        db.Servers.Update(server);
         await db.SaveChangesAsync();
     }
 
-    public async Task DeleteSourceAsync(int sourceId)
+    public async Task DeleteServerAsync(int serverId)
     {
         using var db = _factory.CreateDbContext();
-        var entity = await db.Sources.FindAsync(sourceId);
+        var entity = await db.Servers.FindAsync(serverId);
         if (entity is null) return;
-        db.Sources.Remove(entity);
+        db.Servers.Remove(entity);
         await db.SaveChangesAsync();
+    }
+
+    // ── Server Connections ──────────────────────────────────────────────────
+
+    public async Task<ServerConnection?> GetServerConnectionAsync(int serverId)
+    {
+        using var db = _factory.CreateDbContext();
+        return await db.ServerConnections.FirstOrDefaultAsync(x => x.ServerId == serverId);
+    }
+
+    public async Task SaveServerConnectionAsync(ServerConnection connection)
+    {
+        using var db = _factory.CreateDbContext();
+        var existing = await db.ServerConnections.FirstOrDefaultAsync(x => x.ServerId == connection.ServerId);
+        if (existing is null)
+        {
+            db.ServerConnections.Add(connection);
+        }
+        else
+        {
+            existing.Hostname = connection.Hostname;
+            existing.Port = connection.Port;
+            existing.NamedInstance = connection.NamedInstance;
+            existing.AuthenticationType = connection.AuthenticationType;
+            existing.Username = connection.Username;
+            existing.ModifiedAt = connection.ModifiedAt;
+            existing.ModifiedBy = connection.ModifiedBy;
+            db.ServerConnections.Update(existing);
+        }
+        await db.SaveChangesAsync();
+    }
+
+    // ── Target Databases ────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<TargetDatabase>> GetTargetDatabasesAsync(
+        int? serverId = null, bool includeInactive = false)
+    {
+        using var db = _factory.CreateDbContext();
+        var q = db.TargetDatabases.AsQueryable();
+        if (!includeInactive) q = q.Where(x => x.IsActive);
+        if (serverId.HasValue) q = q.Where(x => x.ServerId == serverId.Value);
+        return await q.OrderBy(x => x.DatabaseName).ToListAsync();
+    }
+
+    public async Task<TargetDatabase?> GetTargetDatabaseByIdAsync(int id)
+    {
+        using var db = _factory.CreateDbContext();
+        return await db.TargetDatabases.Include(x => x.Server).FirstOrDefaultAsync(x => x.TargetDatabaseId == id);
+    }
+
+    public async Task<TargetDatabase> AddTargetDatabaseAsync(TargetDatabase targetDb)
+    {
+        using var db = _factory.CreateDbContext();
+        db.TargetDatabases.Add(targetDb);
+        await db.SaveChangesAsync();
+        return targetDb;
+    }
+
+    public async Task UpdateTargetDatabaseAsync(TargetDatabase targetDb)
+    {
+        using var db = _factory.CreateDbContext();
+        db.TargetDatabases.Update(targetDb);
+        await db.SaveChangesAsync();
+    }
+
+    public async Task DeleteTargetDatabaseAsync(int id)
+    {
+        using var db = _factory.CreateDbContext();
+        var entity = await db.TargetDatabases.FindAsync(id);
+        if (entity is null) return;
+        db.TargetDatabases.Remove(entity);
+        await db.SaveChangesAsync();
+    }
+
+    public async Task<bool> TargetDatabaseNameExistsAsync(int serverId, string name, int? excludeId = null)
+    {
+        using var db = _factory.CreateDbContext();
+        var q = db.TargetDatabases.Where(x => x.ServerId == serverId &&
+            x.DatabaseName == name);
+        if (excludeId.HasValue) q = q.Where(x => x.TargetDatabaseId != excludeId.Value);
+        return await q.AnyAsync();
     }
 
     // ── Databases ───────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<SourceDatabaseInfo>> GetInScopeDatabasesAsync(
-        int? sourceId = null, bool includeInactive = false)
+        int? serverId = null, bool includeInactive = false)
     {
         using var db = _factory.CreateDbContext();
         var q = db.SourceDatabases
-            .Include(d => d.Source)
+            .Include(d => d.Server)
             .Include(d => d.Tables)
                 .ThenInclude(t => t.Columns)
             .AsQueryable();
 
         if (!includeInactive) q = q.Where(x => x.IsActive);
-        if (sourceId.HasValue) q = q.Where(x => x.SourceId == sourceId.Value);
+        if (serverId.HasValue) q = q.Where(x => x.ServerId == serverId.Value);
 
         return await q.Select(d => new SourceDatabaseInfo
         {
             DatabaseId = d.DatabaseId,
-            SourceId = d.SourceId,
-            ServerName = d.Source.ServerName,
+            ServerId = d.ServerId,
+            ServerName = d.Server.ServerName,
             DatabaseName = d.DatabaseName,
             Description = d.Description,
             IsActive = d.IsActive,
@@ -94,7 +192,7 @@ public class EfDataManagerRepository : IDataManagerRepository
     public async Task<SourceDatabase?> GetDatabaseByIdAsync(int databaseId)
     {
         using var db = _factory.CreateDbContext();
-        return await db.SourceDatabases.Include(d => d.Source).FirstOrDefaultAsync(x => x.DatabaseId == databaseId);
+        return await db.SourceDatabases.Include(d => d.Server).FirstOrDefaultAsync(x => x.DatabaseId == databaseId);
     }
 
     public async Task<SourceDatabase> AddDatabaseAsync(SourceDatabase database)
@@ -129,7 +227,7 @@ public class EfDataManagerRepository : IDataManagerRepository
         using var db = _factory.CreateDbContext();
         var q = db.SourceTables
             .Include(t => t.Database)
-                .ThenInclude(d => d.Source)
+                .ThenInclude(d => d.Server)
             .Include(t => t.Columns)
             .AsQueryable();
 
@@ -163,7 +261,7 @@ public class EfDataManagerRepository : IDataManagerRepository
         using var db = _factory.CreateDbContext();
         return await db.SourceTables
             .Include(t => t.Columns.OrderBy(c => c.SortOrder))
-            .Include(t => t.Database).ThenInclude(d => d.Source)
+            .Include(t => t.Database).ThenInclude(d => d.Server)
             .FirstOrDefaultAsync(x => x.TableId == tableId);
     }
 
@@ -194,20 +292,20 @@ public class EfDataManagerRepository : IDataManagerRepository
     // ── Columns ─────────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<SourceColumnInfo>> GetColumnsAsync(
-        int? tableId = null, int? databaseId = null, int? sourceId = null,
+        int? tableId = null, int? databaseId = null, int? serverId = null,
         ColumnFilter filter = ColumnFilter.All, bool includeInactive = false)
     {
         using var db = _factory.CreateDbContext();
         var q = db.SourceColumns
             .Include(c => c.Table)
                 .ThenInclude(t => t.Database)
-                    .ThenInclude(d => d.Source)
+                    .ThenInclude(d => d.Server)
             .AsQueryable();
 
         if (!includeInactive) q = q.Where(c => c.IsActive);
         if (tableId.HasValue) q = q.Where(c => c.TableId == tableId.Value);
         if (databaseId.HasValue) q = q.Where(c => c.Table.DatabaseId == databaseId.Value);
-        if (sourceId.HasValue) q = q.Where(c => c.Table.Database.SourceId == sourceId.Value);
+        if (serverId.HasValue) q = q.Where(c => c.Table.Database.ServerId == serverId.Value);
 
         q = filter switch
         {
@@ -220,7 +318,7 @@ public class EfDataManagerRepository : IDataManagerRepository
             _ => q
         };
 
-        return await q.OrderBy(c => c.Table.Database.Source.ServerName)
+        return await q.OrderBy(c => c.Table.Database.Server.ServerName)
             .ThenBy(c => c.Table.Database.DatabaseName)
             .ThenBy(c => c.Table.SchemaName)
             .ThenBy(c => c.Table.TableName)
@@ -230,7 +328,7 @@ public class EfDataManagerRepository : IDataManagerRepository
             {
                 ColumnId = c.ColumnId,
                 TableId = c.TableId,
-                ServerName = c.Table.Database.Source.ServerName,
+                ServerName = c.Table.Database.Server.ServerName,
                 DatabaseName = c.Table.Database.DatabaseName,
                 SchemaName = c.Table.SchemaName,
                 TableName = c.Table.TableName,
@@ -250,7 +348,7 @@ public class EfDataManagerRepository : IDataManagerRepository
     {
         using var db = _factory.CreateDbContext();
         return await db.SourceColumns
-            .Include(c => c.Table).ThenInclude(t => t.Database).ThenInclude(d => d.Source)
+            .Include(c => c.Table).ThenInclude(t => t.Database).ThenInclude(d => d.Server)
             .FirstOrDefaultAsync(c => c.ColumnId == columnId);
     }
 
@@ -299,7 +397,7 @@ public class EfDataManagerRepository : IDataManagerRepository
 
         return new DataManagerSummaryDto
         {
-            TotalServers = await db.Sources.CountAsync(s => s.IsActive),
+            TotalServers = await db.Servers.CountAsync(s => s.IsActive),
             TotalDatabases = await db.SourceDatabases.CountAsync(d => d.IsActive),
             TotalTables = await db.SourceTables.CountAsync(t => t.IsActive),
             TotalColumns = await db.SourceColumns.CountAsync(c => c.IsActive),
@@ -317,18 +415,18 @@ public class EfDataManagerRepository : IDataManagerRepository
 
     // ── Uniqueness checks ────────────────────────────────────────────────────
 
-    public async Task<bool> ServerNameExistsAsync(string serverName, int? excludeSourceId = null)
+    public async Task<bool> ServerNameExistsAsync(string serverName, int? excludeServerId = null)
     {
         using var db = _factory.CreateDbContext();
-        return await db.Sources.AnyAsync(s =>
-            s.ServerName == serverName && (excludeSourceId == null || s.SourceId != excludeSourceId.Value));
+        return await db.Servers.AnyAsync(s =>
+            s.ServerName == serverName && (excludeServerId == null || s.ServerId != excludeServerId.Value));
     }
 
-    public async Task<bool> DatabaseNameExistsAsync(int sourceId, string databaseName, int? excludeDatabaseId = null)
+    public async Task<bool> DatabaseNameExistsAsync(int serverId, string databaseName, int? excludeDatabaseId = null)
     {
         using var db = _factory.CreateDbContext();
         return await db.SourceDatabases.AnyAsync(d =>
-            d.SourceId == sourceId && d.DatabaseName == databaseName
+            d.ServerId == serverId && d.DatabaseName == databaseName
             && (excludeDatabaseId == null || d.DatabaseId != excludeDatabaseId.Value));
     }
 
@@ -773,5 +871,47 @@ public class EfDataManagerRepository : IDataManagerRepository
             }
         }
         await db.SaveChangesAsync();
+    }
+
+    // --- CopyActivityLog ---
+
+    public async Task LogCopySuccessAsync(LogCopySuccessParams p)
+    {
+        await using var db = await _factory.CreateDbContextAsync();
+        await db.Database.ExecuteSqlRawAsync(
+            "EXEC dbo.usp_LogCopySuccess @PipelineRunId, @MigrationConfigId, @SourceServer, @SourceDatabase, @SourceSchema, @SourceTable, @DestinationServer, @DestinationDatabase, @DestinationSchema, @DestinationTable, @RowsCopied, @StartTime, @EndTime",
+            new SqlParameter("@PipelineRunId",       p.PipelineRunId),
+            new SqlParameter("@MigrationConfigId",   p.MigrationConfigId),
+            new SqlParameter("@SourceServer",         p.SourceServer),
+            new SqlParameter("@SourceDatabase",       p.SourceDatabase),
+            new SqlParameter("@SourceSchema",         p.SourceSchema),
+            new SqlParameter("@SourceTable",          p.SourceTable),
+            new SqlParameter("@DestinationServer",    p.DestinationServer),
+            new SqlParameter("@DestinationDatabase",  p.DestinationDatabase),
+            new SqlParameter("@DestinationSchema",    p.DestinationSchema),
+            new SqlParameter("@DestinationTable",     p.DestinationTable),
+            new SqlParameter("@RowsCopied",           p.RowsCopied),
+            new SqlParameter("@StartTime",            p.StartTime),
+            new SqlParameter("@EndTime",              p.EndTime));
+    }
+
+    public async Task LogCopyFailureAsync(LogCopyFailureParams p)
+    {
+        await using var db = await _factory.CreateDbContextAsync();
+        await db.Database.ExecuteSqlRawAsync(
+            "EXEC dbo.usp_LogCopyFailure @PipelineRunId, @MigrationConfigId, @SourceServer, @SourceDatabase, @SourceSchema, @SourceTable, @DestinationServer, @DestinationDatabase, @DestinationSchema, @DestinationTable, @ErrorMessage, @StartTime, @EndTime",
+            new SqlParameter("@PipelineRunId",       p.PipelineRunId),
+            new SqlParameter("@MigrationConfigId",   p.MigrationConfigId),
+            new SqlParameter("@SourceServer",         p.SourceServer),
+            new SqlParameter("@SourceDatabase",       p.SourceDatabase),
+            new SqlParameter("@SourceSchema",         p.SourceSchema),
+            new SqlParameter("@SourceTable",          p.SourceTable),
+            new SqlParameter("@DestinationServer",    p.DestinationServer),
+            new SqlParameter("@DestinationDatabase",  p.DestinationDatabase),
+            new SqlParameter("@DestinationSchema",    p.DestinationSchema),
+            new SqlParameter("@DestinationTable",     p.DestinationTable),
+            new SqlParameter("@ErrorMessage",         p.ErrorMessage),
+            new SqlParameter("@StartTime",            p.StartTime),
+            new SqlParameter("@EndTime",              p.EndTime));
     }
 }

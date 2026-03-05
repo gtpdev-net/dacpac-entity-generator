@@ -12,11 +12,13 @@ public class DataManagerDbContext : DbContext
     {
     }
 
-    public DbSet<Source> Sources => Set<Source>();
+    public DbSet<Server> Servers => Set<Server>();
     public DbSet<SourceDatabase> SourceDatabases => Set<SourceDatabase>();
     public DbSet<SourceTable> SourceTables => Set<SourceTable>();
     public DbSet<SourceColumn> SourceColumns => Set<SourceColumn>();
     public DbSet<InScopeRelationalColumn> InScopeRelationalColumns => Set<InScopeRelationalColumn>();
+    public DbSet<ServerConnection> ServerConnections => Set<ServerConnection>();
+    public DbSet<TargetDatabase> TargetDatabases => Set<TargetDatabase>();
 
     // ── Schema entities ─────────────────────────────────────────────────────
     public DbSet<SourceIndex> SourceIndexes => Set<SourceIndex>();
@@ -33,21 +35,62 @@ public class DataManagerDbContext : DbContext
     public DbSet<SourceFunction> SourceFunctions => Set<SourceFunction>();
     public DbSet<SourceTrigger> SourceTriggers => Set<SourceTrigger>();
     public DbSet<MigrationConfig> MigrationConfigs => Set<MigrationConfig>();
+    public DbSet<CopyActivityLog> CopyActivityLogs => Set<CopyActivityLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
-        // --- Source ---
-        modelBuilder.Entity<Source>(e =>
+        // --- Server ---
+        modelBuilder.Entity<Server>(e =>
         {
-            e.ToTable("Sources");
-            e.HasKey(x => x.SourceId);
+            e.ToTable("Servers");
+            e.HasKey(x => x.ServerId);
             e.Property(x => x.ServerName).IsRequired().HasMaxLength(255);
             e.Property(x => x.Description).HasMaxLength(1000);
             e.Property(x => x.IsActive).HasDefaultValue(true);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
-            e.HasIndex(x => x.ServerName).IsUnique().HasDatabaseName("UQ_Sources_ServerName");
+            e.Property(x => x.Role)
+                .HasConversion<string>()
+                .HasMaxLength(20)
+                .HasDefaultValue(ServerRole.Source);
+            e.HasIndex(x => x.ServerName).IsUnique().HasDatabaseName("UQ_Servers_ServerName");
+        });
+
+        // --- TargetDatabase ---
+        modelBuilder.Entity<TargetDatabase>(e =>
+        {
+            e.ToTable("TargetDatabases");
+            e.HasKey(x => x.TargetDatabaseId);
+            e.Property(x => x.DatabaseName).IsRequired().HasMaxLength(255);
+            e.Property(x => x.Description).HasMaxLength(1000);
+            e.Property(x => x.IsActive).HasDefaultValue(true);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+            e.HasIndex(x => new { x.ServerId, x.DatabaseName }).IsUnique()
+                .HasDatabaseName("UQ_TargetDatabases_ServerDb");
+            e.HasOne(x => x.Server)
+                .WithMany(s => s.TargetDatabases)
+                .HasForeignKey(x => x.ServerId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // --- ServerConnection ---
+        modelBuilder.Entity<ServerConnection>(e =>
+        {
+            e.ToTable("ServerConnections");
+            e.HasKey(x => x.ServerConnectionId);
+            e.Property(x => x.Hostname).IsRequired().HasMaxLength(255);
+            e.Property(x => x.NamedInstance).HasMaxLength(128);
+            e.Property(x => x.Username).HasMaxLength(255);
+            e.Property(x => x.AuthenticationType)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+            e.HasIndex(x => x.ServerId).IsUnique().HasDatabaseName("UQ_ServerConnections_ServerId");
+            e.HasOne(x => x.Server)
+                .WithOne(s => s.Connection)
+                .HasForeignKey<ServerConnection>(x => x.ServerId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // --- SourceDatabase ---
@@ -60,11 +103,11 @@ public class DataManagerDbContext : DbContext
             e.Property(x => x.IsActive).HasDefaultValue(true);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
             e.Property(x => x.LastImportedModelHash).HasMaxLength(64);
-            e.HasIndex(x => new { x.SourceId, x.DatabaseName }).IsUnique()
+            e.HasIndex(x => new { x.ServerId, x.DatabaseName }).IsUnique()
                 .HasDatabaseName("UQ_SourceDatabases_ServerDb");
-            e.HasOne(x => x.Source)
+            e.HasOne(x => x.Server)
                 .WithMany(s => s.Databases)
-                .HasForeignKey(x => x.SourceId)
+                .HasForeignKey(x => x.ServerId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
@@ -345,6 +388,30 @@ public class DataManagerDbContext : DbContext
                 .HasForeignKey(x => x.TableId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
+
+        // ── CopyActivityLog ───────────────────────────────────────────────────
+        modelBuilder.Entity<CopyActivityLog>(e =>
+        {
+            e.ToTable("CopyActivityLog");
+            e.HasKey(x => x.LogId).HasName("PK_CopyActivityLog");
+            e.Property(x => x.LogId).UseIdentityColumn();
+            e.Property(x => x.PipelineRunId).HasMaxLength(100).IsRequired();
+            e.Property(x => x.MigrationConfigId).IsRequired();
+            e.Property(x => x.SourceServer).HasMaxLength(255).IsRequired();
+            e.Property(x => x.SourceDatabase).HasMaxLength(255).IsRequired();
+            e.Property(x => x.SourceSchema).HasMaxLength(255).IsRequired();
+            e.Property(x => x.SourceTable).HasMaxLength(255).IsRequired();
+            e.Property(x => x.DestinationServer).HasMaxLength(255).IsRequired();
+            e.Property(x => x.DestinationDatabase).HasMaxLength(255).IsRequired();
+            e.Property(x => x.DestinationSchema).HasMaxLength(255).IsRequired();
+            e.Property(x => x.DestinationTable).HasMaxLength(255).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            e.Property(x => x.ErrorMessage).HasColumnType("nvarchar(max)");
+            e.Property(x => x.RowsCopied).IsRequired();
+            e.Property(x => x.StartTime).IsRequired();
+            e.Property(x => x.EndTime).IsRequired();
+            e.Property(x => x.DurationSeconds).IsRequired();
+        });
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
@@ -354,18 +421,18 @@ public class DataManagerDbContext : DbContext
 
         foreach (var entry in ChangeTracker.Entries())
         {
-            // Sources
-            if (entry.Entity is Source src)
+            // Servers
+            if (entry.Entity is Server srv)
             {
                 if (entry.State == EntityState.Added)
                 {
-                    src.CreatedAt = now;
-                    src.CreatedBy = user;
+                    srv.CreatedAt = now;
+                    srv.CreatedBy = user;
                 }
                 if (entry.State is EntityState.Modified or EntityState.Added)
                 {
-                    src.ModifiedAt = now;
-                    src.ModifiedBy = user;
+                    srv.ModifiedAt = now;
+                    srv.ModifiedBy = user;
                 }
             }
             // SourceDatabases

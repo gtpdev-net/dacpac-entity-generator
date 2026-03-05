@@ -3,9 +3,9 @@ using FluentValidation;
 
 namespace DataManager.Core.Validation;
 
-public class SourceValidator : AbstractValidator<Source>
+public class ServerValidator : AbstractValidator<Server>
 {
-    public SourceValidator()
+    public ServerValidator()
     {
         RuleFor(x => x.ServerName)
             .NotEmpty().WithMessage("Server name is required.")
@@ -13,6 +13,50 @@ public class SourceValidator : AbstractValidator<Source>
 
         RuleFor(x => x.Description)
             .MaximumLength(1000).WithMessage("Description must not exceed 1000 characters.");
+
+        RuleFor(x => x.Role)
+            .IsInEnum().WithMessage("Role must be a valid ServerRole value.");
+    }
+}
+
+public class TargetDatabaseValidator : AbstractValidator<TargetDatabase>
+{
+    public TargetDatabaseValidator()
+    {
+        RuleFor(x => x.DatabaseName)
+            .NotEmpty().WithMessage("Database name is required.")
+            .MaximumLength(255).WithMessage("Database name must not exceed 255 characters.");
+
+        RuleFor(x => x.Description)
+            .MaximumLength(1000).WithMessage("Description must not exceed 1000 characters.");
+
+        RuleFor(x => x.ServerId)
+            .GreaterThan(0).WithMessage("A parent server must be selected.");
+    }
+}
+
+public class ServerConnectionValidator : AbstractValidator<ServerConnection>
+{
+    public ServerConnectionValidator()
+    {
+        RuleFor(x => x.Hostname)
+            .NotEmpty().WithMessage("Hostname is required.")
+            .MaximumLength(255).WithMessage("Hostname must not exceed 255 characters.");
+
+        RuleFor(x => x.Port)
+            .InclusiveBetween(1, 65535).WithMessage("Port must be between 1 and 65535.")
+            .When(x => x.Port.HasValue);
+
+        RuleFor(x => x.NamedInstance)
+            .MaximumLength(128).WithMessage("Named instance must not exceed 128 characters.");
+
+        RuleFor(x => x.Username)
+            .NotEmpty().WithMessage("Username is required when using SQL Authentication.")
+            .MaximumLength(255).WithMessage("Username must not exceed 255 characters.")
+            .When(x => x.AuthenticationType == AuthenticationType.SqlAuth);
+
+        RuleFor(x => x.AuthenticationType)
+            .IsInEnum().WithMessage("Authentication type must be a valid value.");
     }
 }
 
@@ -27,7 +71,7 @@ public class SourceDatabaseValidator : AbstractValidator<SourceDatabase>
         RuleFor(x => x.Description)
             .MaximumLength(1000).WithMessage("Description must not exceed 1000 characters.");
 
-        RuleFor(x => x.SourceId)
+        RuleFor(x => x.ServerId)
             .GreaterThan(0).WithMessage("A parent server must be selected.");
     }
 }

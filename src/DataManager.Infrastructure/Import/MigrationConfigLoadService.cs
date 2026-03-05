@@ -29,7 +29,7 @@ public class MigrationConfigLoadService
         // Fetch all qualifying tables with their qualifying columns
         var qualifyingTables = await db.SourceTables
             .Include(t => t.Database)
-                .ThenInclude(d => d.Source)
+                .ThenInclude(d => d.Server)
             .Include(t => t.Columns)
             .Where(t => t.IsActive &&
                         t.Columns.Any(c => c.IsActive &&
@@ -56,7 +56,7 @@ public class MigrationConfigLoadService
                 .ToList();
 
             var columnList  = string.Join(",", qualifyingColumns);
-            var srcServer   = table.Database.Source.ServerName;
+            var srcServer   = table.Database.Server.ServerName;
             var srcDatabase = table.Database.DatabaseName;
             var srcSchema   = table.SchemaName;
             var srcTable    = table.TableName;

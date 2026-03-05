@@ -24,7 +24,7 @@ else
 
     <table class="table table-sm table-borderless mb-3">
         <tbody>
-            <tr><th class="text-muted fw-normal" style="width:160px">Server</th><td>@_db.Source.ServerName</td></tr>
+            <tr><th class="text-muted fw-normal" style="width:160px">Server</th><td>@_db.Server.ServerName</td></tr>
             <tr><th class="text-muted fw-normal">Tables</th><td>@_tableCount</td></tr>
             <tr><th class="text-muted fw-normal">Created</th><td>@_db.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC</td></tr>
             @if (_db.LastImportedAt.HasValue)
@@ -38,7 +38,7 @@ else
         </tbody>
     </table>
 
-    <a class="btn btn-sm btn-outline-primary" href="/servers/@_db.SourceId/databases/@EntityId/tables">Open Full Page →</a>
+    <a class="btn btn-sm btn-outline-primary" href="/servers/@_db.ServerId/databases/@EntityId/tables">Open Full Page →</a>
 }
 
 @code {
