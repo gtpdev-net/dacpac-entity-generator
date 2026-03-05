@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DataManager.Infrastructure.Migrations
 {
     [DbContext(typeof(DataManagerDbContext))]
-    [Migration("20260304144404_AddMigrationConfig")]
-    partial class AddMigrationConfig
+    [Migration("20260305233848_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -24,6 +24,88 @@ namespace DataManager.Infrastructure.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("DataManager.Core.Models.Entities.CopyActivityLog", b =>
+                {
+                    b.Property<int>("LogId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("LogId"));
+
+                    b.Property<string>("DestinationDatabase")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("DestinationSchema")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("DestinationServer")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("DestinationTable")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<int>("DurationSeconds")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("EndTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("MigrationConfigId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PipelineRunId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<long>("RowsCopied")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SourceDatabase")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("SourceSchema")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("SourceServer")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("SourceTable")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<DateTime>("StartTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("LogId")
+                        .HasName("PK_CopyActivityLog");
+
+                    b.ToTable("CopyActivityLog", (string)null);
+                });
 
             modelBuilder.Entity("DataManager.Core.Models.Entities.MigrationConfig", b =>
                 {
@@ -109,13 +191,13 @@ namespace DataManager.Infrastructure.Migrations
                     b.ToTable("MigrationConfigs", (string)null);
                 });
 
-            modelBuilder.Entity("DataManager.Core.Models.Entities.Source", b =>
+            modelBuilder.Entity("DataManager.Core.Models.Entities.Server", b =>
                 {
-                    b.Property<int>("SourceId")
+                    b.Property<int>("ServerId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SourceId"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ServerId"));
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -140,18 +222,80 @@ namespace DataManager.Infrastructure.Migrations
                     b.Property<string>("ModifiedBy")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("Source");
+
                     b.Property<string>("ServerName")
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
-                    b.HasKey("SourceId");
+                    b.HasKey("ServerId");
 
                     b.HasIndex("ServerName")
                         .IsUnique()
-                        .HasDatabaseName("UQ_Sources_ServerName");
+                        .HasDatabaseName("UQ_Servers_ServerName");
 
-                    b.ToTable("Sources", (string)null);
+                    b.ToTable("Servers", (string)null);
+                });
+
+            modelBuilder.Entity("DataManager.Core.Models.Entities.ServerConnection", b =>
+                {
+                    b.Property<int>("ServerConnectionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ServerConnectionId"));
+
+                    b.Property<string>("AuthenticationType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Hostname")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("NamedInstance")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<int?>("Port")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ServerId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Username")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.HasKey("ServerConnectionId");
+
+                    b.HasIndex("ServerId")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_ServerConnections_ServerId");
+
+                    b.ToTable("ServerConnections", (string)null);
                 });
 
             modelBuilder.Entity("DataManager.Core.Models.Entities.SourceCheckConstraint", b =>
@@ -362,12 +506,12 @@ namespace DataManager.Infrastructure.Migrations
                     b.Property<string>("ModifiedBy")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int>("SourceId")
+                    b.Property<int>("ServerId")
                         .HasColumnType("int");
 
                     b.HasKey("DatabaseId");
 
-                    b.HasIndex("SourceId", "DatabaseName")
+                    b.HasIndex("ServerId", "DatabaseName")
                         .IsUnique()
                         .HasDatabaseName("UQ_SourceDatabases_ServerDb");
 
@@ -982,6 +1126,54 @@ namespace DataManager.Infrastructure.Migrations
                     b.ToTable("SourceViewColumns", (string)null);
                 });
 
+            modelBuilder.Entity("DataManager.Core.Models.Entities.TargetDatabase", b =>
+                {
+                    b.Property<int>("TargetDatabaseId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("TargetDatabaseId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("DatabaseName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ServerId")
+                        .HasColumnType("int");
+
+                    b.HasKey("TargetDatabaseId");
+
+                    b.HasIndex("ServerId", "DatabaseName")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_TargetDatabases_ServerDb");
+
+                    b.ToTable("TargetDatabases", (string)null);
+                });
+
             modelBuilder.Entity("DataManager.Infrastructure.Data.InScopeRelationalColumn", b =>
                 {
                     b.Property<int>("ColumnId")
@@ -1016,14 +1208,14 @@ namespace DataManager.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("ServerId")
+                        .HasColumnType("int");
+
                     b.Property<string>("ServerName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("SortOrder")
-                        .HasColumnType("int");
-
-                    b.Property<int>("SourceId")
                         .HasColumnType("int");
 
                     b.Property<int>("TableId")
@@ -1047,6 +1239,17 @@ namespace DataManager.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Table");
+                });
+
+            modelBuilder.Entity("DataManager.Core.Models.Entities.ServerConnection", b =>
+                {
+                    b.HasOne("DataManager.Core.Models.Entities.Server", "Server")
+                        .WithOne("Connection")
+                        .HasForeignKey("DataManager.Core.Models.Entities.ServerConnection", "ServerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Server");
                 });
 
             modelBuilder.Entity("DataManager.Core.Models.Entities.SourceCheckConstraint", b =>
@@ -1073,13 +1276,13 @@ namespace DataManager.Infrastructure.Migrations
 
             modelBuilder.Entity("DataManager.Core.Models.Entities.SourceDatabase", b =>
                 {
-                    b.HasOne("DataManager.Core.Models.Entities.Source", "Source")
+                    b.HasOne("DataManager.Core.Models.Entities.Server", "Server")
                         .WithMany("Databases")
-                        .HasForeignKey("SourceId")
+                        .HasForeignKey("ServerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("Source");
+                    b.Navigation("Server");
                 });
 
             modelBuilder.Entity("DataManager.Core.Models.Entities.SourceForeignKey", b =>
@@ -1225,9 +1428,24 @@ namespace DataManager.Infrastructure.Migrations
                     b.Navigation("View");
                 });
 
-            modelBuilder.Entity("DataManager.Core.Models.Entities.Source", b =>
+            modelBuilder.Entity("DataManager.Core.Models.Entities.TargetDatabase", b =>
                 {
+                    b.HasOne("DataManager.Core.Models.Entities.Server", "Server")
+                        .WithMany("TargetDatabases")
+                        .HasForeignKey("ServerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Server");
+                });
+
+            modelBuilder.Entity("DataManager.Core.Models.Entities.Server", b =>
+                {
+                    b.Navigation("Connection");
+
                     b.Navigation("Databases");
+
+                    b.Navigation("TargetDatabases");
                 });
 
             modelBuilder.Entity("DataManager.Core.Models.Entities.SourceDatabase", b =>
