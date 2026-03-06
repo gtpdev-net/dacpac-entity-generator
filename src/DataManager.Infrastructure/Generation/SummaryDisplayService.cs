@@ -23,7 +23,6 @@ public class SummaryDisplayService
         _logger.LogInfo("");
         _logger.LogInfo("=== Generation Summary ===");
         _logger.LogProgress($"Entities generated: {result.EntitiesGenerated}");
-        _logger.LogProgress($"Views generated: {result.ViewsGenerated}");
 
         if (result.TablesSkipped > 0)
             _logger.LogWarning($"Tables skipped: {result.TablesSkipped}");

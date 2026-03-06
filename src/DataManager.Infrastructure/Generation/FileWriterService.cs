@@ -200,44 +200,6 @@ public class FileWriterService
         }
     }
 
-    public bool WriteViewFile(
-        string outputDirectory,
-        string server,
-        string database,
-        string schema,
-        string viewName,
-        string viewClassCode)
-    {
-        try
-        {
-            // Create output directory structure: ./output/{Server}/{Database}/Views/
-            var serverDir = Path.Combine(outputDirectory, server);
-            var databaseDir = Path.Combine(serverDir, database);
-            var viewsDir = Path.Combine(databaseDir, "Views");
-            
-            Directory.CreateDirectory(viewsDir);
-
-            // Generate filename: {ViewName}.cs (PascalCase)
-            var className = NameConverter.ToPascalCase(viewName);
-            var fileName = $"{className}.cs";
-            var filePath = Path.Combine(viewsDir, fileName);
-
-            // Write file with UTF-8 encoding
-            File.WriteAllText(filePath, viewClassCode, Encoding.UTF8);
-
-            // Get relative path for logging
-            var relativePath = Path.GetRelativePath(outputDirectory, filePath);
-            _logger.LogProgress($"[{server}].[{database}].[{schema}].[{viewName}] - Generated view entity: ./output/{relativePath.Replace('\\', '/')}");
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError($"[{server}].[{database}].[{schema}].[{viewName}] - Failed to write view file: {ex.Message}");
-            return false;
-        }
-    }
-
     public bool WriteDbContextFile(
         string outputDirectory,
         string dbContextCode)

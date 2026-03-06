@@ -32,8 +32,7 @@ public class EntityConfigurationGenerator
     public string GenerateCombinedSQLConfiguration(
         string server,
         string database,
-        List<TableDefinition> tables,
-        List<ViewDefinition> views)
+        List<TableDefinition> tables)
     {
         var sb = new StringBuilder();
         var serverPascal  = NameConverter.ToPascalCase(server);
@@ -61,13 +60,6 @@ public class EntityConfigurationGenerator
                 AppendSQLTableConfiguration(sb, table, serverPascal, databasePascal);
                 sb.AppendLine(); // blank line between tables
             }
-        }
-
-        // ── View configurations ───────────────────────────────────────────────
-        if (views.Count > 0)
-        {
-            sb.AppendLine("            // View Configurations");
-            AppendSQLViewConfigurations(sb, views, serverPascal, databasePascal, database);
         }
 
         // Close method / class / namespace
@@ -106,8 +98,7 @@ public class EntityConfigurationGenerator
     public string GenerateCombinedSQLiteConfiguration(
         string server,
         string database,
-        List<TableDefinition> tables,
-        List<ViewDefinition> views)
+        List<TableDefinition> tables)
     {
         var sb = new StringBuilder();
         var serverPascal   = NameConverter.ToPascalCase(server);
@@ -135,13 +126,6 @@ public class EntityConfigurationGenerator
                 AppendSQLiteTableConfiguration(sb, table, serverPascal, databasePascal);
                 sb.AppendLine(); // blank line between tables
             }
-        }
-
-        // ── View configurations (SQLite) ──────────────────────────────────────
-        if (views.Count > 0)
-        {
-            sb.AppendLine("            // View Configurations");
-            AppendSQLiteViewConfigurations(sb, views, serverPascal, databasePascal);
         }
 
         // Close method / class / namespace
@@ -276,27 +260,6 @@ public class EntityConfigurationGenerator
         }
     }
 
-    private static void AppendSQLViewConfigurations(
-        StringBuilder sb,
-        List<ViewDefinition> views,
-        string serverPascal,
-        string databasePascal,
-        string database)
-    {
-        foreach (var view in views)
-        {
-            var className = NameConverter.ToPascalCase(view.ViewName);
-            bool propertyNameConflict = view.Columns
-                .Select(c => NameConverter.ToPascalCase(c.Name))
-                .Any(pn => pn == className);
-            if (propertyNameConflict)
-                className += "View";
-
-            var fqn = $"Core.Entities.{serverPascal}.{databasePascal}.{className}";
-            sb.AppendLine($"            modelBuilder.Entity<{fqn}>().ToView(\"{view.ViewName}\", \"{database}\");");
-        }
-    }
-
     // ══════════════════════════════════════════════════════════════════════════
     // Private — SQLite table / view helpers
     // ══════════════════════════════════════════════════════════════════════════
@@ -404,24 +367,4 @@ public class EntityConfigurationGenerator
         }
     }
 
-    private static void AppendSQLiteViewConfigurations(
-        StringBuilder sb,
-        List<ViewDefinition> views,
-        string serverPascal,
-        string databasePascal)
-    {
-        foreach (var view in views)
-        {
-            var className = NameConverter.ToPascalCase(view.ViewName);
-            bool propertyNameConflict = view.Columns
-                .Select(c => NameConverter.ToPascalCase(c.Name))
-                .Any(pn => pn == className);
-            if (propertyNameConflict)
-                className += "View";
-
-            var fqn = $"Core.Entities.{serverPascal}.{databasePascal}.{className}";
-            // SQLite: prefix with database name since SQLite has no schemas
-            sb.AppendLine($"            modelBuilder.Entity<{fqn}>().ToView(\"{view.Database}_{view.ViewName}\");");
-        }
-    }
 }

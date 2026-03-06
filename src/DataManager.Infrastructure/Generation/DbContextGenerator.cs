@@ -14,7 +14,6 @@ public class DbContextGenerator
 
     public string GenerateSQLDbContext(
         List<TableDefinition> allTables,
-        List<ViewDefinition> allViews,
         List<(string Server, string Database)> serverDatabasePairs)
     {
         var variant = new DbContextVariant(
@@ -23,7 +22,7 @@ public class DbContextGenerator
             ConfigNsSuffix: "",
             ConfigClassSuffix: "EntityConfiguration");
 
-        return GenerateDbContext(variant, allTables, allViews, serverDatabasePairs);
+        return GenerateDbContext(variant, allTables, serverDatabasePairs);
     }
 
     /// <summary>
@@ -37,7 +36,6 @@ public class DbContextGenerator
     /// </summary>
     public string GenerateSQLiteDbContext(
         List<TableDefinition> allTables,
-        List<ViewDefinition> allViews,
         List<(string Server, string Database)> serverDatabasePairs)
     {
         var variant = new DbContextVariant(
@@ -46,13 +44,12 @@ public class DbContextGenerator
             ConfigNsSuffix: ".SQLite",
             ConfigClassSuffix: "SQLiteEntityConfiguration");
 
-        return GenerateDbContext(variant, allTables, allViews, serverDatabasePairs);
+        return GenerateDbContext(variant, allTables, serverDatabasePairs);
     }
 
     private string GenerateDbContext(
         DbContextVariant variant,
         List<TableDefinition> allTables,
-        List<ViewDefinition> allViews,
         List<(string Server, string Database)> serverDatabasePairs)
     {
         var sb = new StringBuilder();
@@ -70,11 +67,6 @@ public class DbContextGenerator
             entityNamespaces.Add($"DataLayer.Core.Entities.{NameConverter.ToPascalCase(table.Server)}.{NameConverter.ToPascalCase(table.Database)}");
         }
 
-        foreach (var view in allViews)
-        {
-            entityNamespaces.Add($"DataLayer.Core.Entities.{NameConverter.ToPascalCase(view.Server)}.{NameConverter.ToPascalCase(view.Database)}");
-        }
-
         foreach (var (server, database) in serverDatabasePairs)
         {
             entityNamespaces.Add($"DataLayer.Core.Configuration.{NameConverter.ToPascalCase(server)}.{NameConverter.ToPascalCase(database)}{variant.ConfigNsSuffix}");
@@ -87,7 +79,7 @@ public class DbContextGenerator
 
         sb.AppendLine();
 
-        var conflictingNames = DetectDbSetNameConflicts(allTables, allViews);
+        var conflictingNames = DetectDbSetNameConflicts(allTables);
 
         sb.AppendLine($"namespace {variant.Namespace}");
         sb.AppendLine("{");
@@ -99,13 +91,6 @@ public class DbContextGenerator
             AppendDbSetProperties(sb,
                 allTables.Select(t => (t.Server, t.Database, Name: t.TableName, Columns: t.Columns.Select(c => c.Name).ToList())),
                 conflictSuffix: "Entity", sectionComment: "Table Entity DbSets", conflictingNames);
-        }
-
-        if (allViews.Count > 0)
-        {
-            AppendDbSetProperties(sb,
-                allViews.Select(v => (v.Server, v.Database, Name: v.ViewName, Columns: v.Columns.Select(c => c.Name).ToList())),
-                conflictSuffix: "View", sectionComment: "View Entity DbSets", conflictingNames);
         }
 
         sb.AppendLine();
@@ -174,15 +159,12 @@ public class DbContextGenerator
     }
 
     private static HashSet<string> DetectDbSetNameConflicts(
-        List<TableDefinition> allTables,
-        List<ViewDefinition> allViews)
+        List<TableDefinition> allTables)
     {
         var nameUsages = new Dictionary<string, HashSet<(string Server, string Database)>>();
 
         var allItems =
-            allTables.Select(t => (t.Server, t.Database, Name: t.TableName, Columns: t.Columns.Select(c => c.Name).ToList(), ConflictSuffix: "Entity"))
-            .Concat(
-            allViews.Select(v  => (v.Server, v.Database, Name: v.ViewName,  Columns: v.Columns.Select(c => c.Name).ToList(), ConflictSuffix: "View")));
+            allTables.Select(t => (t.Server, t.Database, Name: t.TableName, Columns: t.Columns.Select(c => c.Name).ToList(), ConflictSuffix: "Entity"));
 
         foreach (var item in allItems)
         {

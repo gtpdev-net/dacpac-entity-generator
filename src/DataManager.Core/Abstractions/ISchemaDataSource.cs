@@ -15,11 +15,6 @@ public interface ISchemaDataSource
     Task<List<TableDefinition>> GetTablesForGenerationAsync();
 
     /// <summary>
-    /// Returns all views that should have entity classes generated.
-    /// </summary>
-    Task<List<ViewDefinition>> GetViewsAsync();
-
-    /// <summary>
     /// Returns a discovery report describing schema elements (stored procs, triggers, etc.)
     /// that may require manual attention.
     /// </summary>

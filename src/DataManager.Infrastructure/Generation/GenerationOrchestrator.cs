@@ -99,7 +99,6 @@ public class GenerationOrchestrator
         _fileWriter.EnsureOutputDirectoryExists(sqliteConfigOutputDir);
 
         var allTableDefinitions  = new List<TableDefinition>();
-        var allViews             = new List<ViewDefinition>();
         var allDiscoveryReports  = new List<ElementDiscoveryReport>();
 
         // ── Step 4: Process each Server/Database combination ─────────────────
@@ -152,29 +151,6 @@ public class GenerationOrchestrator
                     $"{discoveryReport.StoredProcedures.Count} stored procedures, " +
                     $"{discoveryReport.Sequences.Count} sequences, " +
                     $"{discoveryReport.Triggers.Count} triggers");
-
-                // Parse and write view entities
-                _logger.LogInfo($"[{server}].[{database}] - Parsing views from DACPAC");
-                var views = _modelXmlParser.ParseViews(doc, server, database);
-
-                foreach (var view in views)
-                {
-                    var viewCode = _entityGenerator.GenerateViewClass(view);
-                    if (_fileWriter.WriteViewFile(sqlEntityAndConfigOutputDir, server, database, view.Schema, view.ViewName, viewCode))
-                    {
-                        result.ViewsGenerated++;
-                        allViews.Add(view);
-                    }
-                    else
-                    {
-                        var errorMsg = $"Failed to write view file: [{server}].[{database}].[{view.Schema}].[{view.ViewName}]";
-                        result.Errors.Add(errorMsg);
-                        result.ErrorsEncountered++;
-                    }
-                }
-
-                if (views.Count > 0)
-                    _logger.LogProgress($"[{server}].[{database}] - Generated {views.Count} view entities");
 
                 // Process tables
                 var tableGroups = rows
@@ -233,7 +209,7 @@ public class GenerationOrchestrator
         }
 
         // ── Step 5: Generate configuration classes ────────────────────────────
-        if (allTableDefinitions.Count > 0 || allViews.Count > 0)
+        if (allTableDefinitions.Count > 0)
         {
             _logger.LogInfo("Generating entity configurations...");
 
@@ -241,14 +217,9 @@ public class GenerationOrchestrator
                 .GroupBy(t => new { t.Server, t.Database })
                 .ToDictionary(g => g.Key, g => g.ToList());
 
-            var viewsByDb = allViews
-                .GroupBy(v => new { v.Server, v.Database })
-                .ToDictionary(g => g.Key, g => g.ToList());
-
             var serverDatabasePairs = new List<(string Server, string Database)>();
 
             var allKeys = tablesByDb.Keys
-                .Union(viewsByDb.Keys)
                 .Distinct()
                 .ToList();
 
@@ -259,12 +230,10 @@ public class GenerationOrchestrator
                 serverDatabasePairs.Add((server, database));
 
                 tablesByDb.TryGetValue(key, out var tables);
-                viewsByDb.TryGetValue(key, out var views);
 
                 tables ??= new List<TableDefinition>();
-                views  ??= new List<ViewDefinition>();
 
-                var configCode = _configGenerator.GenerateCombinedSQLConfiguration(server, database, tables, views);
+                var configCode = _configGenerator.GenerateCombinedSQLConfiguration(server, database, tables);
 
                 if (!_fileWriter.WriteConfigurationFile(sqlEntityAndConfigOutputDir, server, database, configCode))
                 {
@@ -275,7 +244,7 @@ public class GenerationOrchestrator
 
                 // SQLite configuration
                 _logger.LogInfo($"[{server}].[{database}] - Generating SQLite configuration...");
-                var sqliteConfigCode = _configGenerator.GenerateCombinedSQLiteConfiguration(server, database, tables ?? new(), views ?? new());
+                var sqliteConfigCode = _configGenerator.GenerateCombinedSQLiteConfiguration(server, database, tables ?? new());
                 if (!_fileWriter.WriteSQLiteConfigurationFile(sqliteConfigOutputDir, server, database, sqliteConfigCode))
                 {
                     var errorMsg = $"Failed to write SQLite configuration file: [{server}].[{database}]";
@@ -287,7 +256,7 @@ public class GenerationOrchestrator
             // ── Step 6: Generate SQLDbContext ─────────────────────────────────
             _logger.LogInfo("");
             _logger.LogInfo("Generating SQLDbContext...");
-            var dbContextCode = _dbContextGenerator.GenerateSQLDbContext(allTableDefinitions, allViews, serverDatabasePairs);
+            var dbContextCode = _dbContextGenerator.GenerateSQLDbContext(allTableDefinitions, serverDatabasePairs);
             if (!_fileWriter.WriteToPath(sqlDbContextFilePath, dbContextCode))
             {
                 var errorMsg = "Failed to write SQLDbContext file";
@@ -298,7 +267,7 @@ public class GenerationOrchestrator
             // ── Step 6b: Generate SQLiteDbContext ─────────────────────────────
             _logger.LogInfo("");
             _logger.LogInfo("Generating SQLiteDbContext...");
-            var sqliteDbContextCode = _dbContextGenerator.GenerateSQLiteDbContext(allTableDefinitions, allViews, serverDatabasePairs);
+            var sqliteDbContextCode = _dbContextGenerator.GenerateSQLiteDbContext(allTableDefinitions, serverDatabasePairs);
             if (!_fileWriter.WriteToPath(sqliteDbContextFilePath, sqliteDbContextCode))
             {
                 var errorMsg = "Failed to write SQLiteDbContext file";

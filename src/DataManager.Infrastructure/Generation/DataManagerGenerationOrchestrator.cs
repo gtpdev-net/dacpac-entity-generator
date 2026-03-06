@@ -58,25 +58,19 @@ public class DataManagerGenerationOrchestrator
         var tables = await dataSource.GetTablesForGenerationAsync();
         _logger.LogInfo($"Found {tables.Count} table(s) with selected columns.");
 
-        // ── Step 2: Load views from data source ───────────────────────────────
-        _logger.LogInfo("Loading views from DataManagerDb...");
-        var views = await dataSource.GetViewsAsync();
-        _logger.LogInfo($"Found {views.Count} view(s).");
-
-        // ── Step 3: Collect discovery report ─────────────────────────────────
+        // ── Step 2: Collect discovery report ─────────────────────────────────────────────────
         var discoveryReport = await dataSource.GetDiscoveryReportAsync();
         result.DiscoveryReports.Add(discoveryReport);
 
-        if (tables.Count == 0 && views.Count == 0)
+        if (tables.Count == 0)
         {
-            _logger.LogWarning("No tables or views found for generation. " +
+            _logger.LogWarning("No tables found for generation. " +
                                "Ensure columns are marked IsSelectedForLoad = true and PersistenceType ≠ 'D'.");
             return result;
         }
 
-        // ── Clean only the directories/files we will recreate ─────────────────
+        // ── Clean only the directories/files we will recreate ───────────────────────────────────
         var serverNames = tables.Select(t => t.Server)
-                                .Concat(views.Select(v => v.Server))
                                 .Distinct()
                                 .ToList();
 
@@ -121,27 +115,7 @@ public class DataManagerGenerationOrchestrator
             }
         }
 
-        // ── Step 5: Generate view classes ─────────────────────────────────────
-        var generatedViews = new List<ViewDefinition>();
-
-        foreach (var view in views)
-        {
-            var viewCode = _entityGenerator.GenerateViewClass(view);
-            if (_fileWriter.WriteViewFile(
-                    sqlEntityAndConfigOutputDir, view.Server, view.Database, view.Schema, view.ViewName, viewCode))
-            {
-                result.ViewsGenerated++;
-                generatedViews.Add(view);
-            }
-            else
-            {
-                var msg = $"Failed to write view: [{view.Server}].[{view.Database}].[{view.Schema}].[{view.ViewName}]";
-                result.Errors.Add(msg);
-                result.ErrorsEncountered++;
-            }
-        }
-
-        if (generatedTables.Count > 0 || generatedViews.Count > 0)
+        if (generatedTables.Count > 0)
         {
             _logger.LogInfo(string.Empty);
 
@@ -152,11 +126,7 @@ public class DataManagerGenerationOrchestrator
                 .GroupBy(t => new { t.Server, t.Database })
                 .ToDictionary(g => g.Key, g => g.ToList());
 
-            var viewsByDb = generatedViews
-                .GroupBy(v => new { v.Server, v.Database })
-                .ToDictionary(g => g.Key, g => g.ToList());
-
-            var allKeys = tablesByDb.Keys.Union(viewsByDb.Keys).Distinct().ToList();
+            var allKeys = tablesByDb.Keys.Distinct().ToList();
             var serverDatabasePairs = new List<(string Server, string Database)>();
 
             foreach (var key in allKeys)
@@ -166,11 +136,9 @@ public class DataManagerGenerationOrchestrator
                 serverDatabasePairs.Add((server, database));
 
                 tablesByDb.TryGetValue(key, out var dbTables);
-                viewsByDb.TryGetValue(key, out var dbViews);
                 dbTables ??= new List<TableDefinition>();
-                dbViews  ??= new List<ViewDefinition>();
 
-                var configCode = _configGenerator.GenerateCombinedSQLConfiguration(server, database, dbTables, dbViews);
+                var configCode = _configGenerator.GenerateCombinedSQLConfiguration(server, database, dbTables);
                 if (!_fileWriter.WriteConfigurationFile(sqlEntityAndConfigOutputDir, server, database, configCode))
                 {
                     var msg = $"Failed to write SQL configuration: [{server}].[{database}]";
@@ -181,7 +149,7 @@ public class DataManagerGenerationOrchestrator
                 // ── Step 6b: Generate SQLite configuration ─────────────────────────
                 _logger.LogInfo(string.Empty);
                 _logger.LogInfo($"Generating SQLite configuration for [{server}].[{database}]...");
-                var sqliteConfigCode = _configGenerator.GenerateCombinedSQLiteConfiguration(server, database, dbTables, dbViews);
+                var sqliteConfigCode = _configGenerator.GenerateCombinedSQLiteConfiguration(server, database, dbTables);
                 if (!_fileWriter.WriteSQLiteConfigurationFile(sqliteConfigOutputDir, server, database, sqliteConfigCode))
                 {
                     var msg = $"Failed to write SQLite configuration: [{server}].[{database}]";
@@ -194,7 +162,7 @@ public class DataManagerGenerationOrchestrator
             _logger.LogInfo(string.Empty);
             _logger.LogInfo("Generating SQLDbContext...");
             var dbContextCode = _dbContextGenerator.GenerateSQLDbContext(
-                generatedTables, generatedViews, serverDatabasePairs);
+                generatedTables, serverDatabasePairs);
 
             if (!_fileWriter.WriteToPath(sqlDbContextFilePath, dbContextCode))
             {
@@ -207,7 +175,7 @@ public class DataManagerGenerationOrchestrator
             _logger.LogInfo(string.Empty);
             _logger.LogInfo("Generating SQLiteDbContext...");
             var sqliteDbContextCode = _dbContextGenerator.GenerateSQLiteDbContext(
-                generatedTables, generatedViews, serverDatabasePairs);
+                generatedTables, serverDatabasePairs);
 
             if (!_fileWriter.WriteToPath(sqliteDbContextFilePath, sqliteDbContextCode))
             {
@@ -240,8 +208,7 @@ public class DataManagerGenerationOrchestrator
 
         _logger.LogInfo(string.Empty);
         _logger.LogProgress(
-            $"Generation complete: {result.EntitiesGenerated} entit{(result.EntitiesGenerated == 1 ? "y" : "ies")}, " +
-            $"{result.ViewsGenerated} view{(result.ViewsGenerated == 1 ? "" : "s")}" +
+            $"Generation complete: {result.EntitiesGenerated} entit{(result.EntitiesGenerated == 1 ? "y" : "ies")}" +
             (result.ErrorsEncountered > 0 ? $", {result.ErrorsEncountered} error(s)." : "."));
 
         return result;
