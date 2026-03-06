@@ -93,12 +93,12 @@ public class DbContextGenerator
                     }
 
                     var fullyQualifiedType = $"{serverPascal}.{databasePascal}.{className}";
-                    var pluralName = NameConverter.Pluralize(className);
+                    var dbSetName = className + "DbSet";
                     
                     // Add database prefix only if there's a naming conflict
-                    var dbSetPropertyName = conflictingNames.Contains(pluralName)
-                        ? $"{databasePascal}{pluralName}"
-                        : pluralName;
+                    var dbSetPropertyName = conflictingNames.Contains(dbSetName)
+                        ? $"{databasePascal}{dbSetName}"
+                        : dbSetName;
 
                     sb.AppendLine($"        public DbSet<DataLayer.Core.Entities.{fullyQualifiedType}> {dbSetPropertyName} {{ get; set; }} = null!;");
                 }
@@ -137,12 +137,12 @@ public class DbContextGenerator
                     }
 
                     var fullyQualifiedType = $"{serverPascal}.{databasePascal}.{className}";
-                    var pluralName = NameConverter.Pluralize(className);
+                    var dbSetName = className + "DbSet";
                     
                     // Add database prefix only if there's a naming conflict
-                    var dbSetPropertyName = conflictingNames.Contains(pluralName)
-                        ? $"{databasePascal}{pluralName}"
-                        : pluralName;
+                    var dbSetPropertyName = conflictingNames.Contains(dbSetName)
+                        ? $"{databasePascal}{dbSetName}"
+                        : dbSetName;
 
                     sb.AppendLine($"        public DbSet<DataLayer.Core.Entities.{fullyQualifiedType}> {dbSetPropertyName} {{ get; set; }} = null!;");
                 }
@@ -275,11 +275,11 @@ public class DbContextGenerator
                         className += "Entity";
 
                     var fullyQualifiedType = $"{serverPascal}.{databasePascal}.{className}";
-                    var pluralName         = NameConverter.Pluralize(className);
+                    var dbSetName          = className + "DbSet";
 
-                    var dbSetPropertyName = conflictingNames.Contains(pluralName)
-                        ? $"{databasePascal}{pluralName}"
-                        : pluralName;
+                    var dbSetPropertyName = conflictingNames.Contains(dbSetName)
+                        ? $"{databasePascal}{dbSetName}"
+                        : dbSetName;
 
                     sb.AppendLine($"        public DbSet<DataLayer.Core.Entities.{fullyQualifiedType}> {dbSetPropertyName} {{ get; set; }} = null!;");
                 }
@@ -315,11 +315,11 @@ public class DbContextGenerator
                         className += "View";
 
                     var fullyQualifiedType = $"{serverPascal}.{databasePascal}.{className}";
-                    var pluralName         = NameConverter.Pluralize(className);
+                    var dbSetName          = className + "DbSet";
 
-                    var dbSetPropertyName = conflictingNames.Contains(pluralName)
-                        ? $"{databasePascal}{pluralName}"
-                        : pluralName;
+                    var dbSetPropertyName = conflictingNames.Contains(dbSetName)
+                        ? $"{databasePascal}{dbSetName}"
+                        : dbSetName;
 
                     sb.AppendLine($"        public DbSet<DataLayer.Core.Entities.{fullyQualifiedType}> {dbSetPropertyName} {{ get; set; }} = null!;");
                 }
@@ -379,13 +379,13 @@ public class DbContextGenerator
                 className += "Entity";
             }
 
-            var pluralName = NameConverter.Pluralize(className);
+            var dbSetName = className + "DbSet";
             
-            if (!nameUsages.ContainsKey(pluralName))
+            if (!nameUsages.ContainsKey(dbSetName))
             {
-                nameUsages[pluralName] = new HashSet<(string, string)>();
+                nameUsages[dbSetName] = new HashSet<(string, string)>();
             }
-            nameUsages[pluralName].Add((table.Server, table.Database));
+            nameUsages[dbSetName].Add((table.Server, table.Database));
         }
 
         // Analyze views
@@ -402,13 +402,13 @@ public class DbContextGenerator
                 className += "View";
             }
 
-            var pluralName = NameConverter.Pluralize(className);
+            var dbSetName = className + "DbSet";
             
-            if (!nameUsages.ContainsKey(pluralName))
+            if (!nameUsages.ContainsKey(dbSetName))
             {
-                nameUsages[pluralName] = new HashSet<(string, string)>();
+                nameUsages[dbSetName] = new HashSet<(string, string)>();
             }
-            nameUsages[pluralName].Add((view.Server, view.Database));
+            nameUsages[dbSetName].Add((view.Server, view.Database));
         }
 
         // Return names that appear in more than one server/database combination
