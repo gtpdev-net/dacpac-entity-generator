@@ -54,6 +54,56 @@
     </div>
 </div>
 
+<!-- Global Destination Override -->
+<div class="card mb-3">
+    <div class="card-header fw-semibold">Global Destination Override</div>
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Dest. Server</label>
+                <select class="form-select form-select-sm"
+                        value="@_globalDestServer"
+                        @onchange="e => { _globalDestServer = e.Value?.ToString(); _globalDestDatabase = null; }">
+                    <option value="">— none —</option>
+                    @foreach (var srv in _targetServers)
+                    {
+                        <option value="@srv.ServerName">@srv.ServerName</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Dest. Database</label>
+                <select class="form-select form-select-sm"
+                        value="@_globalDestDatabase"
+                        @onchange="e => _globalDestDatabase = e.Value?.ToString()"
+                        disabled="@string.IsNullOrWhiteSpace(_globalDestServer)">
+                    <option value="">— none —</option>
+                    @foreach (var db in GetTargetDbs(_globalDestServer))
+                    {
+                        <option value="@db.DatabaseName">@db.DatabaseName</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-auto">
+                <button class="btn btn-sm btn-warning" @onclick="ApplyGlobalDestination"
+                        disabled="@(string.IsNullOrWhiteSpace(_globalDestServer) && string.IsNullOrWhiteSpace(_globalDestDatabase))">
+                    Apply to Filtered Rows
+                </button>
+            </div>
+            <div class="col-md-auto text-muted small">
+                Applies to <strong>@Filtered.Count</strong> currently filtered rows.
+            </div>
+        </div>
+        @if (_globalApplyResult is not null)
+        {
+            <div class="alert alert-success alert-dismissible fade show py-2 mt-2 mb-0" role="alert">
+                Applied to <strong>@_globalApplyResult</strong> rows.
+                <button type="button" class="btn-close" @onclick="() => _globalApplyResult = null"></button>
+            </div>
+        }
+    </div>
+</div>
+
 <!-- Toolbar -->
 <div class="d-flex justify-content-between align-items-center mb-2">
     <span class="text-muted small">@Filtered.Count rows</span>
@@ -213,6 +263,10 @@ else
     private List<TargetDatabase> _targetDatabases = new();
     private bool _loading;
     private MigrationConfigLoadResult? _loadResult;
+
+    private string? _globalDestServer;
+    private string? _globalDestDatabase;
+    private int? _globalApplyResult;
 
     private HashSet<string> _selectedSourceServers   = new(StringComparer.OrdinalIgnoreCase);
     private HashSet<string> _selectedSourceDatabases = new(StringComparer.OrdinalIgnoreCase);
@@ -391,5 +445,29 @@ else
         await Repository.UpdateMigrationConfigAsync(entity);
         dto.IsActive = entity.IsActive;
         dto.ModifiedAt = entity.ModifiedAt;
+    }
+
+    private async Task ApplyGlobalDestination()
+    {
+        bool applyServer   = !string.IsNullOrWhiteSpace(_globalDestServer);
+        bool applyDatabase = !string.IsNullOrWhiteSpace(_globalDestDatabase);
+        if (!applyServer && !applyDatabase) return;
+
+        var targets = Filtered.ToList();
+        int count = 0;
+        foreach (var dto in targets)
+        {
+            var entity = await Repository.GetMigrationConfigByIdAsync(dto.MigrationConfigId);
+            if (entity is null) continue;
+            if (applyServer)   entity.DestinationServer   = _globalDestServer;
+            if (applyDatabase) entity.DestinationDatabase = _globalDestDatabase;
+            entity.ModifiedAt = DateTime.UtcNow;
+            entity.ModifiedBy = "user";
+            await Repository.UpdateMigrationConfigAsync(entity);
+            count++;
+        }
+
+        _globalApplyResult = count;
+        await LoadData();
     }
 }
