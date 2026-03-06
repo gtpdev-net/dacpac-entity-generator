@@ -51,6 +51,7 @@ public static class InfrastructureServiceExtensions
         services.AddTransient<EntityConfigurationGenerator>();
         services.AddTransient<FileWriterService>();
         services.AddTransient<DbContextGenerator>();
+        services.AddTransient<DbSetReplacementService>();
         services.AddTransient<GenerationOrchestrator>();
         services.AddTransient<DataManagerGenerationOrchestrator>();
         services.AddTransient<SummaryDisplayService>();

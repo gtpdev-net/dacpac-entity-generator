@@ -15,6 +15,7 @@ public class DataManagerGenerationOrchestrator
     private readonly EntityConfigurationGenerator _configGenerator;
     private readonly FileWriterService            _fileWriter;
     private readonly DbContextGenerator           _dbContextGenerator;
+    private readonly DbSetReplacementService      _dbSetReplacer;
     private readonly IGenerationLogger            _logger;
 
     public DataManagerGenerationOrchestrator(
@@ -22,12 +23,14 @@ public class DataManagerGenerationOrchestrator
         EntityConfigurationGenerator configGenerator,
         FileWriterService            fileWriter,
         DbContextGenerator           dbContextGenerator,
+        DbSetReplacementService      dbSetReplacer,
         IGenerationLogger            logger)
     {
         _entityGenerator    = entityGenerator;
         _configGenerator    = configGenerator;
         _fileWriter         = fileWriter;
         _dbContextGenerator = dbContextGenerator;
+        _dbSetReplacer      = dbSetReplacer;
         _logger             = logger;
     }
 
@@ -45,7 +48,8 @@ public class DataManagerGenerationOrchestrator
         string sqlEntityAndConfigOutputDir,
         string sqlDbContextFilePath,
         string sqliteConfigOutputDir,
-        string sqliteDbContextFilePath)
+        string sqliteDbContextFilePath,
+        string? dbSetMappingCsvPath = null)
     {
         var result = new GenerationResult { Success = true };
 
@@ -211,6 +215,27 @@ public class DataManagerGenerationOrchestrator
                 result.Errors.Add(msg);
                 result.ErrorsEncountered++;
             }
+        }
+
+        // ── Step 8 (optional): Replace old DbSet usages ─────────────────
+        if (!string.IsNullOrEmpty(dbSetMappingCsvPath) && File.Exists(dbSetMappingCsvPath))
+        {
+            _logger.LogInfo(string.Empty);
+            _logger.LogInfo("Replacing old DbSet usages from CSV mapping...");
+
+            var targetDirectory = Path.GetDirectoryName(dbSetMappingCsvPath)!;
+            var replacementResult = _dbSetReplacer.ReplaceDbSetUsages(
+                dbSetMappingCsvPath, sqlDbContextFilePath, targetDirectory);
+
+            result.DbSetReplacementsMapped       = replacementResult.ReplacementsMapped;
+            result.DbSetReplacementsUnchanged    = replacementResult.UnchangedCount;
+            result.DbSetReplacementFilesModified  = replacementResult.FilesModified;
+            result.DbSetUnmatchedOldNames         = replacementResult.UnmatchedOldNames;
+
+            _logger.LogProgress(
+                $"DbSet replacement: {replacementResult.ReplacementsMapped} mapped, " +
+                $"{replacementResult.FilesModified} file(s) modified, " +
+                $"{replacementResult.UnchangedCount} unchanged.");
         }
 
         _logger.LogInfo(string.Empty);

@@ -144,6 +144,10 @@
                         <span class="form-label text-muted small">SQLite DbContext File</span><br />
                         <span class="font-monospace @(string.IsNullOrWhiteSpace(_solutionRoot) ? "text-secondary" : "")">@(string.IsNullOrWhiteSpace(_solutionRoot) ? "(set Solution Root above)" : SqliteDbContextFilePath)</span>
                     </div>
+                    <div class="col-12">
+                        <span class="form-label text-muted small">DbSet Mapping CSV (optional)</span><br />
+                        <span class="font-monospace @(string.IsNullOrWhiteSpace(_solutionRoot) || DbSetMappingCsvPath is null ? "text-secondary" : "")">@(string.IsNullOrWhiteSpace(_solutionRoot) ? "(set Solution Root above)" : (DbSetMappingCsvPath ?? "(not configured)"))</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -209,6 +213,11 @@
             <div class="col-auto"><span class="badge bg-info fs-6">Views: @_result.ViewsGenerated</span></div>
             <div class="col-auto"><span class="badge bg-warning text-dark fs-6">Skipped: @_result.TablesSkipped</span></div>
             <div class="col-auto"><span class="badge bg-danger fs-6">Errors: @_result.ErrorsEncountered</span></div>
+            @if (_result.DbSetReplacementsMapped > 0 || _result.DbSetReplacementFilesModified > 0)
+            {
+                <div class="col-auto"><span class="badge bg-primary fs-6">DbSet Replacements: @_result.DbSetReplacementsMapped</span></div>
+                <div class="col-auto"><span class="badge bg-secondary fs-6">Files Updated: @_result.DbSetReplacementFilesModified</span></div>
+            }
         </div>
         @if (_result.Errors.Count > 0)
         {
@@ -257,12 +266,16 @@
     private string _sqlDbContextSuffix        = string.Empty;
     private string _sqliteConfigSuffix        = string.Empty;
     private string _sqliteDbContextSuffix     = string.Empty;
+    private string _dbSetMappingCsvSuffix      = string.Empty;
 
     // ── Computed output paths ─────────────────────────────────────────────────
     private string SqlEntityAndConfigOutputPath => Path.Combine(_solutionRoot.Trim(), _sqlEntityAndConfigSuffix);
     private string SqlDbContextFilePath         => Path.Combine(_solutionRoot.Trim(), _sqlDbContextSuffix);
     private string SqliteConfigOutputPath       => Path.Combine(_solutionRoot.Trim(), _sqliteConfigSuffix);
     private string SqliteDbContextFilePath      => Path.Combine(_solutionRoot.Trim(), _sqliteDbContextSuffix);
+    private string? DbSetMappingCsvPath         => string.IsNullOrWhiteSpace(_dbSetMappingCsvSuffix)
+                                                    ? null
+                                                    : Path.Combine(_solutionRoot.Trim(), _dbSetMappingCsvSuffix);
 
     // ── Database-sourced inputs ───────────────────────────────────────────────
     private IReadOnlyList<SourceDatabaseInfo> _databases = Array.Empty<SourceDatabaseInfo>();
@@ -289,6 +302,7 @@
         _sqlDbContextSuffix       = Configuration["GenerationPaths:SqlDbContextFilePath"] ?? string.Empty;
         _sqliteConfigSuffix       = Configuration["GenerationPaths:SqliteConfigOutputDir"] ?? string.Empty;
         _sqliteDbContextSuffix    = Configuration["GenerationPaths:SqliteDbContextFilePath"] ?? string.Empty;
+        _dbSetMappingCsvSuffix   = Configuration["GenerationPaths:DbSetMappingCsvPath"] ?? string.Empty;
     }
 
     // ── Mode toggle ───────────────────────────────────────────────────────────
@@ -370,7 +384,8 @@
             SqlEntityAndConfigOutputPath,
             SqlDbContextFilePath,
             SqliteConfigOutputPath,
-            SqliteDbContextFilePath);
+            SqliteDbContextFilePath,
+            DbSetMappingCsvPath);
     }
 
     // ── File-sourced pipeline ─────────────────────────────────────────────────
@@ -395,7 +410,8 @@
             SqlEntityAndConfigOutputPath,
             SqlDbContextFilePath,
             SqliteConfigOutputPath,
-            SqliteDbContextFilePath));
+            SqliteDbContextFilePath,
+            DbSetMappingCsvPath));
     }
 
     private void Cancel() => _cts?.Cancel();
