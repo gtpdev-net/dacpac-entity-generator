@@ -316,8 +316,8 @@ public class EntityConfigurationGenerator
 
         var fqn = $"Core.Entities.{serverPascal}.{databasePascal}.{entityClassName}";
 
-        // Override [Table] schema attribute — SQLite has no schemas
-        sb.AppendLine($"            modelBuilder.Entity<{fqn}>().ToTable(\"{table.TableName}\");");
+        // Override [Table] schema attribute — prefix with database name since SQLite has no schemas
+        sb.AppendLine($"            modelBuilder.Entity<{fqn}>().ToTable(\"{table.Database}_{table.TableName}\");");
 
         // Indexes (no filtered indexes for SQLite)
         foreach (var index in table.Indexes)
@@ -420,8 +420,8 @@ public class EntityConfigurationGenerator
                 className += "View";
 
             var fqn = $"Core.Entities.{serverPascal}.{databasePascal}.{className}";
-            // SQLite: ToView with no schema
-            sb.AppendLine($"            modelBuilder.Entity<{fqn}>().ToView(\"{view.ViewName}\");");
+            // SQLite: prefix with database name since SQLite has no schemas
+            sb.AppendLine($"            modelBuilder.Entity<{fqn}>().ToView(\"{view.Database}_{view.ViewName}\");");
         }
     }
 }
