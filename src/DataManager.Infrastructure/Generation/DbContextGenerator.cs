@@ -6,180 +6,24 @@ namespace DataManager.Infrastructure.Generation;
 
 public class DbContextGenerator
 {
+    private record DbContextVariant(
+        string Namespace,
+        string ClassName,
+        string ConfigNsSuffix,
+        string ConfigClassSuffix);
+
     public string GenerateSQLDbContext(
         List<TableDefinition> allTables,
         List<ViewDefinition> allViews,
         List<(string Server, string Database)> serverDatabasePairs)
     {
-        var sb = new StringBuilder();
+        var variant = new DbContextVariant(
+            Namespace: "DataLayer.Infrastructure.Persistence.Contexts",
+            ClassName: "SQLDbContext",
+            ConfigNsSuffix: "",
+            ConfigClassSuffix: "EntityConfiguration");
 
-        sb.AppendLine(FileWriterService.GeneratedFileTag);
-
-        // Generate using statements
-        sb.AppendLine("using Microsoft.EntityFrameworkCore;");
-        sb.AppendLine("using DataLayer.Infrastructure.Persistence.Contexts.Base;");
-        sb.AppendLine();
-
-        // Generate using statements for all entity namespaces
-        var entityNamespaces = new HashSet<string>();
-        
-        foreach (var table in allTables)
-        {
-            var ns = $"DataLayer.Core.Entities.{NameConverter.ToPascalCase(table.Server)}.{NameConverter.ToPascalCase(table.Database)}";
-            entityNamespaces.Add(ns);
-        }
-
-        foreach (var view in allViews)
-        {
-            var ns = $"DataLayer.Core.Entities.{NameConverter.ToPascalCase(view.Server)}.{NameConverter.ToPascalCase(view.Database)}";
-            entityNamespaces.Add(ns);
-        }
-
-        // Add using statements for configuration namespaces
-        foreach (var (server, database) in serverDatabasePairs)
-        {
-            var serverPascal = NameConverter.ToPascalCase(server);
-            var databasePascal = NameConverter.ToPascalCase(database);
-            var configNs = $"DataLayer.Core.Configuration.{serverPascal}.{databasePascal}";
-            entityNamespaces.Add(configNs);
-        }
-
-        foreach (var ns in entityNamespaces.OrderBy(x => x))
-        {
-            sb.AppendLine($"using {ns};");
-        }
-
-        sb.AppendLine();
-
-        // Detect naming conflicts - find entity names that appear in multiple databases
-        var conflictingNames = DetectDbSetNameConflicts(allTables, allViews);
-
-        // Namespace declaration
-        sb.AppendLine("namespace DataLayer.Infrastructure.Persistence.Contexts");
-        sb.AppendLine("{");
-
-        // Class declaration
-        sb.AppendLine("    public partial class SQLDbContext(DbContextOptions<SQLDbContext> options) : BaseDbContext(options)");
-        sb.AppendLine("    {");
-
-        // Generate DbSet properties for all tables
-        if (allTables.Count > 0)
-        {
-            sb.AppendLine("        // Table Entity DbSets");
-            var groupedTables = allTables
-                .GroupBy(t => new { t.Server, t.Database })
-                .OrderBy(g => g.Key.Server)
-                .ThenBy(g => g.Key.Database);
-
-            foreach (var group in groupedTables)
-            {
-                var serverPascal = NameConverter.ToPascalCase(group.Key.Server);
-                var databasePascal = NameConverter.ToPascalCase(group.Key.Database);
-
-                sb.AppendLine();
-                sb.AppendLine($"        // [{group.Key.Server}].[{group.Key.Database}]");
-
-                foreach (var table in group.OrderBy(t => t.TableName))
-                {
-                    var className = NameConverter.ToPascalCase(table.TableName);
-                    
-                    // Check if we added "Entity" suffix during generation
-                    bool propertyNameConflict = table.Columns
-                        .Select(c => NameConverter.ToPascalCase(c.Name))
-                        .Any(pn => pn == className);
-                    if (propertyNameConflict)
-                    {
-                        className += "Entity";
-                    }
-
-                    var fullyQualifiedType = $"{serverPascal}.{databasePascal}.{className}";
-                    var dbSetName = className + "DbSet";
-                    
-                    // Add database prefix only if there's a naming conflict
-                    var dbSetPropertyName = conflictingNames.Contains(dbSetName)
-                        ? $"{databasePascal}{dbSetName}"
-                        : dbSetName;
-
-                    sb.AppendLine($"        public DbSet<DataLayer.Core.Entities.{fullyQualifiedType}> {dbSetPropertyName} {{ get; set; }} = null!;");
-                }
-            }
-        }
-
-        // Generate DbSet properties for all views
-        if (allViews.Count > 0)
-        {
-            sb.AppendLine();
-            sb.AppendLine("        // View Entity DbSets");
-            var groupedViews = allViews
-                .GroupBy(v => new { v.Server, v.Database })
-                .OrderBy(g => g.Key.Server)
-                .ThenBy(g => g.Key.Database);
-
-            foreach (var group in groupedViews)
-            {
-                var serverPascal = NameConverter.ToPascalCase(group.Key.Server);
-                var databasePascal = NameConverter.ToPascalCase(group.Key.Database);
-
-                sb.AppendLine();
-                sb.AppendLine($"        // [{group.Key.Server}].[{group.Key.Database}]");
-
-                foreach (var view in group.OrderBy(v => v.ViewName))
-                {
-                    var className = NameConverter.ToPascalCase(view.ViewName);
-                    
-                    // Check if we added "View" suffix during generation
-                    bool propertyNameConflict = view.Columns
-                        .Select(c => NameConverter.ToPascalCase(c.Name))
-                        .Any(pn => pn == className);
-                    if (propertyNameConflict)
-                    {
-                        className += "View";
-                    }
-
-                    var fullyQualifiedType = $"{serverPascal}.{databasePascal}.{className}";
-                    var dbSetName = className + "DbSet";
-                    
-                    // Add database prefix only if there's a naming conflict
-                    var dbSetPropertyName = conflictingNames.Contains(dbSetName)
-                        ? $"{databasePascal}{dbSetName}"
-                        : dbSetName;
-
-                    sb.AppendLine($"        public DbSet<DataLayer.Core.Entities.{fullyQualifiedType}> {dbSetPropertyName} {{ get; set; }} = null!;");
-                }
-            }
-        }
-
-        sb.AppendLine();
-
-        // OnModelCreating method
-        sb.AppendLine("        protected override void OnModelCreating(ModelBuilder modelBuilder)");
-        sb.AppendLine("        {");
-        sb.AppendLine("            base.OnModelCreating(modelBuilder);");
-        sb.AppendLine();
-
-        // Generate configuration calls
-        if (serverDatabasePairs.Count > 0)
-        {
-            sb.AppendLine("            // Entity Configurations");
-            foreach (var (server, database) in serverDatabasePairs.OrderBy(x => x.Server).ThenBy(x => x.Database))
-            {
-                var serverPascal = NameConverter.ToPascalCase(server);
-                var databasePascal = NameConverter.ToPascalCase(database);
-                var configClass = $"{databasePascal}EntityConfiguration";
-                
-                sb.AppendLine($"            {configClass}.Configure(modelBuilder);");
-            }
-        }
-
-        sb.AppendLine("        }");
-
-        // Close class
-        sb.AppendLine("    }");
-
-        // Close namespace
-        sb.AppendLine("}");
-
-        return sb.ToString();
+        return GenerateDbContext(variant, allTables, allViews, serverDatabasePairs);
     }
 
     /// <summary>
@@ -196,37 +40,44 @@ public class DbContextGenerator
         List<ViewDefinition> allViews,
         List<(string Server, string Database)> serverDatabasePairs)
     {
+        var variant = new DbContextVariant(
+            Namespace: "DataLayer.Infrastructure.Persistence.Contexts.SQLite",
+            ClassName: "SQLiteDbContext",
+            ConfigNsSuffix: ".SQLite",
+            ConfigClassSuffix: "SQLiteEntityConfiguration");
+
+        return GenerateDbContext(variant, allTables, allViews, serverDatabasePairs);
+    }
+
+    private string GenerateDbContext(
+        DbContextVariant variant,
+        List<TableDefinition> allTables,
+        List<ViewDefinition> allViews,
+        List<(string Server, string Database)> serverDatabasePairs)
+    {
         var sb = new StringBuilder();
 
         sb.AppendLine(FileWriterService.GeneratedFileTag);
 
-        // Generate using statements
         sb.AppendLine("using Microsoft.EntityFrameworkCore;");
         sb.AppendLine("using DataLayer.Infrastructure.Persistence.Contexts.Base;");
         sb.AppendLine();
 
-        // Shared entity namespaces (same as SQL Server — entities are shared)
         var entityNamespaces = new HashSet<string>();
 
         foreach (var table in allTables)
         {
-            var ns = $"DataLayer.Core.Entities.{NameConverter.ToPascalCase(table.Server)}.{NameConverter.ToPascalCase(table.Database)}";
-            entityNamespaces.Add(ns);
+            entityNamespaces.Add($"DataLayer.Core.Entities.{NameConverter.ToPascalCase(table.Server)}.{NameConverter.ToPascalCase(table.Database)}");
         }
 
         foreach (var view in allViews)
         {
-            var ns = $"DataLayer.Core.Entities.{NameConverter.ToPascalCase(view.Server)}.{NameConverter.ToPascalCase(view.Database)}";
-            entityNamespaces.Add(ns);
+            entityNamespaces.Add($"DataLayer.Core.Entities.{NameConverter.ToPascalCase(view.Server)}.{NameConverter.ToPascalCase(view.Database)}");
         }
 
-        // Configuration namespaces — use the SQLite sub-namespace
         foreach (var (server, database) in serverDatabasePairs)
         {
-            var serverPascal   = NameConverter.ToPascalCase(server);
-            var databasePascal = NameConverter.ToPascalCase(database);
-            var configNs = $"DataLayer.Core.Configuration.{serverPascal}.{databasePascal}.SQLite";
-            entityNamespaces.Add(configNs);
+            entityNamespaces.Add($"DataLayer.Core.Configuration.{NameConverter.ToPascalCase(server)}.{NameConverter.ToPascalCase(database)}{variant.ConfigNsSuffix}");
         }
 
         foreach (var ns in entityNamespaces.OrderBy(x => x))
@@ -236,182 +87,121 @@ public class DbContextGenerator
 
         sb.AppendLine();
 
-        // Detect naming conflicts across databases
         var conflictingNames = DetectDbSetNameConflicts(allTables, allViews);
 
-        // Namespace declaration
-        sb.AppendLine("namespace DataLayer.Infrastructure.Persistence.Contexts.SQLite");
+        sb.AppendLine($"namespace {variant.Namespace}");
         sb.AppendLine("{");
-
-        // Class declaration
-        sb.AppendLine("    public partial class SQLiteDbContext(DbContextOptions<SQLiteDbContext> options) : BaseDbContext(options)");
+        sb.AppendLine($"    public partial class {variant.ClassName}(DbContextOptions<{variant.ClassName}> options) : BaseDbContext(options)");
         sb.AppendLine("    {");
 
-        // Generate DbSet properties for all tables
         if (allTables.Count > 0)
         {
-            sb.AppendLine("        // Table Entity DbSets");
-            var groupedTables = allTables
-                .GroupBy(t => new { t.Server, t.Database })
-                .OrderBy(g => g.Key.Server)
-                .ThenBy(g => g.Key.Database);
-
-            foreach (var group in groupedTables)
-            {
-                var serverPascal   = NameConverter.ToPascalCase(group.Key.Server);
-                var databasePascal = NameConverter.ToPascalCase(group.Key.Database);
-
-                sb.AppendLine();
-                sb.AppendLine($"        // [{group.Key.Server}].[{group.Key.Database}]");
-
-                foreach (var table in group.OrderBy(t => t.TableName))
-                {
-                    var className = NameConverter.ToPascalCase(table.TableName);
-
-                    bool propertyNameConflict = table.Columns
-                        .Select(c => NameConverter.ToPascalCase(c.Name))
-                        .Any(pn => pn == className);
-                    if (propertyNameConflict)
-                        className += "Entity";
-
-                    var fullyQualifiedType = $"{serverPascal}.{databasePascal}.{className}";
-                    var dbSetName          = className + "DbSet";
-
-                    var dbSetPropertyName = conflictingNames.Contains(dbSetName)
-                        ? $"{databasePascal}{dbSetName}"
-                        : dbSetName;
-
-                    sb.AppendLine($"        public DbSet<DataLayer.Core.Entities.{fullyQualifiedType}> {dbSetPropertyName} {{ get; set; }} = null!;");
-                }
-            }
+            AppendDbSetProperties(sb,
+                allTables.Select(t => (t.Server, t.Database, Name: t.TableName, Columns: t.Columns.Select(c => c.Name).ToList())),
+                conflictSuffix: "Entity", sectionComment: "Table Entity DbSets", conflictingNames);
         }
 
-        // Generate DbSet properties for all views
         if (allViews.Count > 0)
         {
-            sb.AppendLine();
-            sb.AppendLine("        // View Entity DbSets");
-            var groupedViews = allViews
-                .GroupBy(v => new { v.Server, v.Database })
-                .OrderBy(g => g.Key.Server)
-                .ThenBy(g => g.Key.Database);
-
-            foreach (var group in groupedViews)
-            {
-                var serverPascal   = NameConverter.ToPascalCase(group.Key.Server);
-                var databasePascal = NameConverter.ToPascalCase(group.Key.Database);
-
-                sb.AppendLine();
-                sb.AppendLine($"        // [{group.Key.Server}].[{group.Key.Database}]");
-
-                foreach (var view in group.OrderBy(v => v.ViewName))
-                {
-                    var className = NameConverter.ToPascalCase(view.ViewName);
-
-                    bool propertyNameConflict = view.Columns
-                        .Select(c => NameConverter.ToPascalCase(c.Name))
-                        .Any(pn => pn == className);
-                    if (propertyNameConflict)
-                        className += "View";
-
-                    var fullyQualifiedType = $"{serverPascal}.{databasePascal}.{className}";
-                    var dbSetName          = className + "DbSet";
-
-                    var dbSetPropertyName = conflictingNames.Contains(dbSetName)
-                        ? $"{databasePascal}{dbSetName}"
-                        : dbSetName;
-
-                    sb.AppendLine($"        public DbSet<DataLayer.Core.Entities.{fullyQualifiedType}> {dbSetPropertyName} {{ get; set; }} = null!;");
-                }
-            }
+            AppendDbSetProperties(sb,
+                allViews.Select(v => (v.Server, v.Database, Name: v.ViewName, Columns: v.Columns.Select(c => c.Name).ToList())),
+                conflictSuffix: "View", sectionComment: "View Entity DbSets", conflictingNames);
         }
 
         sb.AppendLine();
-
-        // OnModelCreating method
         sb.AppendLine("        protected override void OnModelCreating(ModelBuilder modelBuilder)");
         sb.AppendLine("        {");
         sb.AppendLine("            base.OnModelCreating(modelBuilder);");
         sb.AppendLine();
 
-        // Generate configuration calls — use SQLite configuration classes
         if (serverDatabasePairs.Count > 0)
         {
             sb.AppendLine("            // Entity Configurations");
-            foreach (var (server, database) in serverDatabasePairs.OrderBy(x => x.Server).ThenBy(x => x.Database))
+            foreach (var (_, database) in serverDatabasePairs.OrderBy(x => x.Server).ThenBy(x => x.Database))
             {
-                var databasePascal = NameConverter.ToPascalCase(database);
-                var configClass    = $"{databasePascal}SQLiteEntityConfiguration";
-
-                sb.AppendLine($"            {configClass}.Configure(modelBuilder);");
+                sb.AppendLine($"            {NameConverter.ToPascalCase(database)}{variant.ConfigClassSuffix}.Configure(modelBuilder);");
             }
         }
 
         sb.AppendLine("        }");
-
-        // Close class
         sb.AppendLine("    }");
-
-        // Close namespace
         sb.AppendLine("}");
 
         return sb.ToString();
     }
 
-    private HashSet<string> DetectDbSetNameConflicts(
+    private static void AppendDbSetProperties(
+        StringBuilder sb,
+        IEnumerable<(string Server, string Database, string Name, List<string> Columns)> items,
+        string conflictSuffix,
+        string sectionComment,
+        HashSet<string> conflictingNames)
+    {
+        sb.AppendLine();
+        sb.AppendLine($"        // {sectionComment}");
+
+        var grouped = items
+            .GroupBy(i => new { i.Server, i.Database })
+            .OrderBy(g => g.Key.Server)
+            .ThenBy(g => g.Key.Database);
+
+        foreach (var group in grouped)
+        {
+            var serverPascal   = NameConverter.ToPascalCase(group.Key.Server);
+            var databasePascal = NameConverter.ToPascalCase(group.Key.Database);
+
+            sb.AppendLine();
+            sb.AppendLine($"        // [{group.Key.Server}].[{group.Key.Database}]");
+
+            foreach (var item in group.OrderBy(i => i.Name))
+            {
+                var className = NameConverter.ToPascalCase(item.Name);
+
+                bool propertyNameConflict = item.Columns
+                    .Select(NameConverter.ToPascalCase)
+                    .Any(pn => pn == className);
+                if (propertyNameConflict)
+                    className += conflictSuffix;
+
+                var dbSetName         = className + "DbSet";
+                var dbSetPropertyName = conflictingNames.Contains(dbSetName)
+                    ? $"{databasePascal}{dbSetName}"
+                    : dbSetName;
+
+                sb.AppendLine($"        public DbSet<DataLayer.Core.Entities.{serverPascal}.{databasePascal}.{className}> {dbSetPropertyName} {{ get; set; }} = null!;");
+            }
+        }
+    }
+
+    private static HashSet<string> DetectDbSetNameConflicts(
         List<TableDefinition> allTables,
         List<ViewDefinition> allViews)
     {
-        // Track pluralized names and which server/database combinations they appear in
         var nameUsages = new Dictionary<string, HashSet<(string Server, string Database)>>();
 
-        // Analyze tables
-        foreach (var table in allTables)
+        var allItems =
+            allTables.Select(t => (t.Server, t.Database, Name: t.TableName, Columns: t.Columns.Select(c => c.Name).ToList(), ConflictSuffix: "Entity"))
+            .Concat(
+            allViews.Select(v  => (v.Server, v.Database, Name: v.ViewName,  Columns: v.Columns.Select(c => c.Name).ToList(), ConflictSuffix: "View")));
+
+        foreach (var item in allItems)
         {
-            var className = NameConverter.ToPascalCase(table.TableName);
-            
-            // Check if "Entity" suffix was added
-            bool propertyNameConflict = table.Columns
-                .Select(c => NameConverter.ToPascalCase(c.Name))
+            var className = NameConverter.ToPascalCase(item.Name);
+
+            bool propertyNameConflict = item.Columns
+                .Select(NameConverter.ToPascalCase)
                 .Any(pn => pn == className);
             if (propertyNameConflict)
-            {
-                className += "Entity";
-            }
+                className += item.ConflictSuffix;
 
             var dbSetName = className + "DbSet";
-            
-            if (!nameUsages.ContainsKey(dbSetName))
-            {
-                nameUsages[dbSetName] = new HashSet<(string, string)>();
-            }
-            nameUsages[dbSetName].Add((table.Server, table.Database));
+
+            if (!nameUsages.TryGetValue(dbSetName, out var set))
+                nameUsages[dbSetName] = set = new HashSet<(string, string)>();
+
+            set.Add((item.Server, item.Database));
         }
 
-        // Analyze views
-        foreach (var view in allViews)
-        {
-            var className = NameConverter.ToPascalCase(view.ViewName);
-            
-            // Check if "View" suffix was added
-            bool propertyNameConflict = view.Columns
-                .Select(c => NameConverter.ToPascalCase(c.Name))
-                .Any(pn => pn == className);
-            if (propertyNameConflict)
-            {
-                className += "View";
-            }
-
-            var dbSetName = className + "DbSet";
-            
-            if (!nameUsages.ContainsKey(dbSetName))
-            {
-                nameUsages[dbSetName] = new HashSet<(string, string)>();
-            }
-            nameUsages[dbSetName].Add((view.Server, view.Database));
-        }
-
-        // Return names that appear in more than one server/database combination
         return nameUsages
             .Where(kvp => kvp.Value.Count > 1)
             .Select(kvp => kvp.Key)
