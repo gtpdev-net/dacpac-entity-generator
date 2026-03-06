@@ -62,11 +62,6 @@ public class GenerationOrchestrator
     {
         var result = new GenerationResult { Success = true };
 
-        // Ensure a clean SQL entity/config output directory (input staging is separate)
-        _fileWriter.CleanOutputDirectory(sqlEntityAndConfigOutputDir, force: true);
-        _fileWriter.EnsureOutputDirectoryExists(sqlEntityAndConfigOutputDir);
-        _fileWriter.EnsureOutputDirectoryExists(sqliteConfigOutputDir);
-
         // ── Step 1: Locate Excel file ─────────────────────────────────────────
         var excelFilePath = _excelReader.FindExcelFile(inputDirectory);
         if (excelFilePath == null)
@@ -88,6 +83,16 @@ public class GenerationOrchestrator
 
         // ── Step 3: Group by Server / Database ────────────────────────────────
         var groupedData = _excelReader.GroupByServerAndDatabase(filteredRows);
+
+        // ── Clean only the directories/files we will recreate ─────────────────
+        var serverNames = groupedData.Keys.ToList();
+        _fileWriter.CleanGeneratedDirectories(sqlEntityAndConfigOutputDir, serverNames);
+        _fileWriter.CleanGeneratedDirectories(sqliteConfigOutputDir, serverNames);
+        _fileWriter.CleanStaleGeneratedDirectories(sqlEntityAndConfigOutputDir);
+        _fileWriter.CleanStaleGeneratedDirectories(sqliteConfigOutputDir);
+        _fileWriter.CleanGeneratedFiles(sqlDbContextFilePath, sqliteDbContextFilePath);
+        _fileWriter.EnsureOutputDirectoryExists(sqlEntityAndConfigOutputDir);
+        _fileWriter.EnsureOutputDirectoryExists(sqliteConfigOutputDir);
 
         var allTableDefinitions  = new List<TableDefinition>();
         var allViews             = new List<ViewDefinition>();

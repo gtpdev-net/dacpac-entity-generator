@@ -13,7 +13,7 @@ public class DbContextGenerator
     {
         var sb = new StringBuilder();
 
-        sb.AppendLine("/* This is generated code - do not modify directly */");
+        sb.AppendLine(FileWriterService.GeneratedFileTag);
 
         // Generate using statements
         sb.AppendLine("using Microsoft.EntityFrameworkCore;");
@@ -198,7 +198,7 @@ public class DbContextGenerator
     {
         var sb = new StringBuilder();
 
-        sb.AppendLine("/* This is generated code - do not modify directly */");
+        sb.AppendLine(FileWriterService.GeneratedFileTag);
 
         // Generate using statements
         sb.AppendLine("using Microsoft.EntityFrameworkCore;");

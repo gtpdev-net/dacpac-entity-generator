@@ -40,7 +40,7 @@ public class EntityConfigurationGenerator
         var databasePascal = NameConverter.ToPascalCase(database);
 
         // File header
-        sb.AppendLine("/* This is generated code - do not modify directly */");
+        sb.AppendLine(FileWriterService.GeneratedFileTag);
         sb.AppendLine("using Microsoft.EntityFrameworkCore;");
         sb.AppendLine("using DataLayer.Core.Entities;");
         sb.AppendLine();
@@ -114,7 +114,7 @@ public class EntityConfigurationGenerator
         var databasePascal = NameConverter.ToPascalCase(database);
 
         // File header
-        sb.AppendLine("/* This is generated code - do not modify directly */");
+        sb.AppendLine(FileWriterService.GeneratedFileTag);
         sb.AppendLine("using Microsoft.EntityFrameworkCore;");
         sb.AppendLine("using DataLayer.Core.Entities;");
         sb.AppendLine();

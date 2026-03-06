@@ -18,7 +18,7 @@ public class EntityClassGenerator
     {
         var sb = new StringBuilder();
 
-        sb.AppendLine("/* This is generated code - do not modify directly */");
+        sb.AppendLine(FileWriterService.GeneratedFileTag);
 
         // Using statements
         sb.AppendLine("using System;");
@@ -290,6 +290,8 @@ public class EntityClassGenerator
     public string GenerateViewClass(ViewDefinition view)
     {
         var sb = new StringBuilder();
+
+        sb.AppendLine(FileWriterService.GeneratedFileTag);
 
         // Using statements
         sb.AppendLine("using System;");

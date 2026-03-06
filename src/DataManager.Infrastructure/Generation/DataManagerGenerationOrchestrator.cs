@@ -49,11 +49,6 @@ public class DataManagerGenerationOrchestrator
     {
         var result = new GenerationResult { Success = true };
 
-        // Ensure clean output directories
-        _fileWriter.CleanOutputDirectory(sqlEntityAndConfigOutputDir, force: true);
-        _fileWriter.EnsureOutputDirectoryExists(sqlEntityAndConfigOutputDir);
-        _fileWriter.EnsureOutputDirectoryExists(sqliteConfigOutputDir);
-
         // ── Step 1: Load tables from data source ──────────────────────────────
         _logger.LogInfo("Loading tables from DataManagerDb...");
         var tables = await dataSource.GetTablesForGenerationAsync();
@@ -74,6 +69,20 @@ public class DataManagerGenerationOrchestrator
                                "Ensure columns are marked IsSelectedForLoad = true and PersistenceType ≠ 'D'.");
             return result;
         }
+
+        // ── Clean only the directories/files we will recreate ─────────────────
+        var serverNames = tables.Select(t => t.Server)
+                                .Concat(views.Select(v => v.Server))
+                                .Distinct()
+                                .ToList();
+
+        _fileWriter.CleanGeneratedDirectories(sqlEntityAndConfigOutputDir, serverNames);
+        _fileWriter.CleanGeneratedDirectories(sqliteConfigOutputDir, serverNames);
+        _fileWriter.CleanStaleGeneratedDirectories(sqlEntityAndConfigOutputDir);
+        _fileWriter.CleanStaleGeneratedDirectories(sqliteConfigOutputDir);
+        _fileWriter.CleanGeneratedFiles(sqlDbContextFilePath, sqliteDbContextFilePath);
+        _fileWriter.EnsureOutputDirectoryExists(sqlEntityAndConfigOutputDir);
+        _fileWriter.EnsureOutputDirectoryExists(sqliteConfigOutputDir);
 
         _logger.LogInfo(string.Empty);
 
