@@ -265,6 +265,23 @@ public class EfDataManagerRepository : IDataManagerRepository
             .FirstOrDefaultAsync(x => x.TableId == tableId);
     }
 
+    public async Task<IReadOnlyList<SourceTable>> GetTablesWithColumnsForGenerationAsync(int databaseId)
+    {
+        using var db = _factory.CreateDbContext();
+        // Filtered Include requires EF Core 5+. Columns are filtered server-side so no
+        // client-side Where() is needed after materialisation.
+        // AsSplitQuery avoids a Cartesian product when tables have many columns.
+        return await db.SourceTables
+            .Where(t => t.DatabaseId == databaseId && t.IsActive)
+            .Include(t => t.Database).ThenInclude(d => d.Server)
+            .Include(t => t.Columns
+                .Where(c => c.IsActive && c.IsSelectedForLoad && c.PersistenceType != 'D')
+                .OrderBy(c => c.SortOrder))
+            .AsSplitQuery()
+            .OrderBy(t => t.SchemaName).ThenBy(t => t.TableName)
+            .ToListAsync();
+    }
+
     public async Task<SourceTable> AddTableAsync(SourceTable table)
     {
         using var db = _factory.CreateDbContext();
@@ -614,6 +631,23 @@ public class EfDataManagerRepository : IDataManagerRepository
                 TriggerName = t.TriggerName,
                 SqlBody = t.SqlBody,
                 IsActive = t.IsActive
+            }).ToListAsync();
+    }
+
+    public async Task<IReadOnlyList<SourceTriggerSummary>> GetTriggersForDatabaseAsync(int databaseId)
+    {
+        using var db = _factory.CreateDbContext();
+        return await db.SourceTriggers
+            .Where(t => t.IsActive && t.Table.DatabaseId == databaseId && t.Table.IsActive)
+            .OrderBy(t => t.TableId).ThenBy(t => t.TriggerName)
+            .Select(t => new SourceTriggerSummary
+            {
+                SourceTriggerId = t.SourceTriggerId,
+                TableId         = t.TableId,
+                SchemaName      = t.SchemaName,
+                TriggerName     = t.TriggerName,
+                HasSqlBody      = t.SqlBody != null,
+                IsActive        = t.IsActive
             }).ToListAsync();
     }
 

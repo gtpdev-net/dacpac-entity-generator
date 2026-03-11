@@ -44,6 +44,12 @@ public interface IDataManagerRepository
     // --- Tables ---
     Task<IReadOnlyList<SourceTableInfo>> GetInScopeTablesAsync(int? databaseId = null, bool includeInactive = false);
     Task<SourceTable?> GetTableByIdAsync(int tableId);
+    /// <summary>
+    /// Batch-loads all active tables for a database with their generation-eligible columns
+    /// (IsActive, IsSelectedForLoad, PersistenceType != 'D') in a single query.
+    /// Avoids the N+1 pattern of calling <see cref="GetTableByIdAsync"/> per table.
+    /// </summary>
+    Task<IReadOnlyList<SourceTable>> GetTablesWithColumnsForGenerationAsync(int databaseId);
     Task<SourceTable> AddTableAsync(SourceTable table);
     Task UpdateTableAsync(SourceTable table);
     Task DeleteTableAsync(int tableId);
@@ -85,6 +91,11 @@ public interface IDataManagerRepository
     // --- Triggers ---
     Task<IReadOnlyList<SourceTriggerSummary>> GetTriggersAsync(int tableId);
     Task<IReadOnlyList<SourceTriggerDetail>> GetTriggerDetailsAsync(int tableId);
+    /// <summary>
+    /// Batch-loads all active triggers for every table in the given database in a single query.
+    /// Avoids the N+1 pattern of calling <see cref="GetTriggersAsync"/> per table.
+    /// </summary>
+    Task<IReadOnlyList<SourceTriggerSummary>> GetTriggersForDatabaseAsync(int databaseId);
 
     // --- Indexes ---
     Task<IReadOnlyList<SourceIndexSummary>> GetIndexesAsync(int tableId);

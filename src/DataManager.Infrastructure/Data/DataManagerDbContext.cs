@@ -149,6 +149,12 @@ public class DataManagerDbContext : DbContext
             e.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
             e.HasIndex(x => new { x.TableId, x.ColumnName }).IsUnique()
                 .HasDatabaseName("UQ_SourceColumns_TableColumn");
+            // Filtered covering index for the entity-generation query:
+            //   WHERE IsActive = 1 AND IsSelectedForLoad = 1 AND PersistenceType != 'D'
+            //   ORDER BY TableId, SortOrder
+            e.HasIndex(x => new { x.TableId, x.SortOrder })
+                .HasDatabaseName("IX_SourceColumns_GenerationFilter")
+                .HasFilter("[IsActive] = 1 AND [IsSelectedForLoad] = 1 AND [PersistenceType] != 'D'");
             e.Property(x => x.SqlType).HasMaxLength(128);
             e.Property(x => x.DefaultValue).HasMaxLength(2000);
             e.Property(x => x.ComputedExpression).HasMaxLength(2000);

@@ -46,37 +46,23 @@ public class DataManagerDbSchemaDataSource : ISchemaDataSource
 
     private async Task<List<TableDefinition>> GetTablesForDatabaseAsync(int databaseId)
     {
-        var db = await _repo.GetDatabaseByIdAsync(databaseId);
-        if (db == null)
-            return new List<TableDefinition>();
+        var tables = await _repo.GetTablesWithColumnsForGenerationAsync(databaseId);
+        var result = new List<TableDefinition>();
 
-        var serverName   = db.Server?.ServerName ?? string.Empty;
-        var databaseName = db.DatabaseName;
-
-        var tableInfoList = await _repo.GetInScopeTablesAsync(databaseId);
-        var result        = new List<TableDefinition>();
-
-        foreach (var tableInfo in tableInfoList)
+        foreach (var table in tables)
         {
-            var table = await _repo.GetTableByIdAsync(tableInfo.TableId);
-            if (table == null) continue;
-
-            // Columns eligible for relational EF generation:
-            //   IsActive=true, IsSelectedForLoad=true, PersistenceType ≠ 'D'
-            var eligibleColumns = table.Columns
-                .Where(c => c.IsActive && c.IsSelectedForLoad && c.PersistenceType != 'D')
-                .OrderBy(c => c.SortOrder)
-                .ToList();
-
+            // Columns already filtered (IsActive, IsSelectedForLoad, PersistenceType != 'D')
+            // and ordered by SortOrder by the repository query.
+            var eligibleColumns = table.Columns.ToList();
             if (eligibleColumns.Count == 0) continue;
 
             var tableDefinition = new TableDefinition
             {
-                Server   = serverName,
-                Database = databaseName,
-                Schema   = table.SchemaName,
+                Server    = table.Database.Server?.ServerName ?? string.Empty,
+                Database  = table.Database.DatabaseName,
+                Schema    = table.SchemaName,
                 TableName = table.TableName,
-                Columns  = eligibleColumns.Select(MapColumn).ToList(),
+                Columns   = eligibleColumns.Select(MapColumn).ToList(),
             };
 
             result.Add(tableDefinition);
@@ -134,8 +120,21 @@ public class DataManagerDbSchemaDataSource : ISchemaDataSource
         var databaseName = db.DatabaseName;
         var location     = $"[{serverName}].[{databaseName}]";
 
+        // Batch-load stored procs, functions, table summaries, and all triggers in parallel.
+        // Each repository call opens its own DbContext so concurrent execution is safe.
+        var storedProcsTask = _repo.GetStoredProceduresAsync(databaseId);
+        var functionsTask   = _repo.GetFunctionsAsync(databaseId);
+        var tableInfosTask  = _repo.GetInScopeTablesAsync(databaseId);
+        var triggersTask    = _repo.GetTriggersForDatabaseAsync(databaseId);
+
+        await Task.WhenAll(storedProcsTask, functionsTask, tableInfosTask, triggersTask);
+
+        var storedProcs = storedProcsTask.Result;
+        var functions   = functionsTask.Result;
+        var tableInfos  = tableInfosTask.Result;
+        var triggers    = triggersTask.Result;
+
         // Stored procedures
-        var storedProcs = await _repo.GetStoredProceduresAsync(databaseId);
         var spDetails = storedProcs
             .Select(p => new ElementDetail
             {
@@ -146,24 +145,24 @@ public class DataManagerDbSchemaDataSource : ISchemaDataSource
             })
             .ToList();
 
-        // Functions
-        var functions = await _repo.GetFunctionsAsync(databaseId);
-        // (functions are returned as ElementTypeCounts entry, not a dedicated list on the report)
-
-        // Triggers (gathered from all tables)
-        var tableInfoList = await _repo.GetInScopeTablesAsync(databaseId);
-        var triggerDetails = new List<ElementDetail>();
-        foreach (var tableInfo in tableInfoList)
-        {
-            var triggers = await _repo.GetTriggersAsync(tableInfo.TableId);
-            triggerDetails.AddRange(triggers.Select(t => new ElementDetail
+        // Triggers — join to table summaries in memory to build location strings.
+        var tableById = tableInfos.ToDictionary(t => t.TableId);
+        var triggerDetails = triggers
+            .Select(t =>
             {
-                Name     = $"{t.SchemaName}.{t.TriggerName}",
-                Location = $"{location}.[{tableInfo.SchemaName}].[{tableInfo.TableName}]",
-                Type     = "Trigger",
-                Details  = t.HasSqlBody ? "Has SQL body" : string.Empty,
-            }));
-        }
+                tableById.TryGetValue(t.TableId, out var tbl);
+                var tableLocation = tbl is not null
+                    ? $"{location}.[{tbl.SchemaName}].[{tbl.TableName}]"
+                    : location;
+                return new ElementDetail
+                {
+                    Name     = $"{t.SchemaName}.{t.TriggerName}",
+                    Location = tableLocation,
+                    Type     = "Trigger",
+                    Details  = t.HasSqlBody ? "Has SQL body" : string.Empty,
+                };
+            })
+            .ToList();
 
         var typeCounts = new Dictionary<string, int>
         {
@@ -174,10 +173,10 @@ public class DataManagerDbSchemaDataSource : ISchemaDataSource
 
         return new ElementDiscoveryReport
         {
-            Server           = serverName,
-            Database         = databaseName,
-            StoredProcedures = spDetails,
-            Triggers         = triggerDetails,
+            Server            = serverName,
+            Database          = databaseName,
+            StoredProcedures  = spDetails,
+            Triggers          = triggerDetails,
             ElementTypeCounts = typeCounts,
         };
     }
