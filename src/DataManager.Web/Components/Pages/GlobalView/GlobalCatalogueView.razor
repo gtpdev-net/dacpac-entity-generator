@@ -3,6 +3,7 @@
 @inject IDataManagerRepository Repository
 @inject NavigationManager Nav
 @inject IConfiguration Configuration
+@inject DataManager.Infrastructure.Import.MigrationConfigLoadService MigrationConfigLoader
 
 <PageTitle>Migration Selection &mdash; @Configuration["AppTitle"] Migration</PageTitle>
 
@@ -222,12 +223,14 @@ else
             var idx = _all!.FindIndex(c => c.ColumnId == info.ColumnId);
             if (idx >= 0) _all[idx] = updated;
         }
+        await MigrationConfigLoader.RefreshMigrationConfigForTableAsync(info.TableId);
     }
 
     private async Task UpdateType(SourceColumnInfo info, char type)
     {
         await Repository.BulkUpdateColumnsAsync(new[] { info.ColumnId }, c => c.PersistenceType = type);
         info.PersistenceType = type;
+        await MigrationConfigLoader.RefreshMigrationConfigForTableAsync(info.TableId);
     }
 
     private void ExportCsv()

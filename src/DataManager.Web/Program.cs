@@ -25,6 +25,21 @@ builder.Services.AddScoped<IGenerationLogger>(sp => sp.GetRequiredService<Blazor
 
 var app = builder.Build();
 
+// ── Startup: auto-populate MigrationConfig if empty ─────────────────────────
+try
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var loader = scope.ServiceProvider
+        .GetRequiredService<DataManager.Infrastructure.Import.MigrationConfigLoadService>();
+    await loader.EnsurePopulatedAsync();
+}
+catch (Exception ex)
+{
+    app.Services.GetRequiredService<ILoggerFactory>()
+        .CreateLogger("Startup")
+        .LogError(ex, "Failed to auto-populate MigrationConfig on startup.");
+}
+
 // ── Pipeline ─────────────────────────────────────────────────────────────────
 if (!app.Environment.IsDevelopment())
 {

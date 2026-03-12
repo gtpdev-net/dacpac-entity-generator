@@ -1014,6 +1014,8 @@ public class EfDataManagerRepository : IDataManagerRepository
     public async Task<MigrationConfig> AddMigrationConfigAsync(MigrationConfig config)
     {
         using var db = _factory.CreateDbContext();
+        if (config.CreatedAt == default) config.CreatedAt = DateTime.UtcNow;
+        config.CreatedBy ??= "system";
         db.MigrationConfigs.Add(config);
         await db.SaveChangesAsync();
         return config;
@@ -1022,6 +1024,8 @@ public class EfDataManagerRepository : IDataManagerRepository
     public async Task UpdateMigrationConfigAsync(MigrationConfig config)
     {
         using var db = _factory.CreateDbContext();
+        config.ModifiedAt = DateTime.UtcNow;
+        config.ModifiedBy ??= "system";
         db.MigrationConfigs.Update(config);
         await db.SaveChangesAsync();
     }
@@ -1038,12 +1042,15 @@ public class EfDataManagerRepository : IDataManagerRepository
     public async Task BulkUpsertMigrationConfigsAsync(IEnumerable<MigrationConfig> configs)
     {
         using var db = _factory.CreateDbContext();
+        var now = DateTime.UtcNow;
         foreach (var config in configs)
         {
             var existing = await db.MigrationConfigs
                 .FirstOrDefaultAsync(x => x.TableId == config.TableId);
             if (existing is null)
             {
+                if (config.CreatedAt == default) config.CreatedAt = now;
+                config.CreatedBy ??= "system";
                 db.MigrationConfigs.Add(config);
             }
             else
@@ -1055,6 +1062,8 @@ public class EfDataManagerRepository : IDataManagerRepository
                 existing.DestinationSchema = config.DestinationSchema;
                 existing.DestinationTable  = config.DestinationTable;
                 existing.ColumnList        = config.ColumnList;
+                existing.ModifiedAt        = now;
+                existing.ModifiedBy        = config.ModifiedBy ?? "system";
                 // Preserve user-edited: DestinationServer, DestinationDatabase, FilterCondition, IsActive
             }
         }
