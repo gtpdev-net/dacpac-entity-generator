@@ -590,6 +590,30 @@ public class EfDataManagerRepository : IDataManagerRepository
             .ToListAsync();
         results.AddRange(funcs);
 
+        var columns = await db.SourceColumns
+            .Where(c => c.ColumnName.Contains(searchTerm))
+            .OrderBy(c => c.Table.Database.Server.ServerName)
+                .ThenBy(c => c.Table.Database.DatabaseName)
+                .ThenBy(c => c.Table.SchemaName)
+                .ThenBy(c => c.Table.TableName)
+                .ThenBy(c => c.ColumnName)
+            .Take(maxResults)
+            .Select(c => new SchemaObjectSearchResult
+            {
+                ServerId = c.Table.Database.ServerId,
+                ServerName = c.Table.Database.Server.ServerName,
+                DatabaseId = c.Table.DatabaseId,
+                DatabaseName = c.Table.Database.DatabaseName,
+                SchemaName = c.Table.SchemaName,
+                TableId = c.TableId,
+                TableName = c.Table.TableName,
+                ObjectName = c.ColumnName,
+                ObjectId = c.ColumnId,
+                ObjectType = SchemaObjectType.Column
+            })
+            .ToListAsync();
+        results.AddRange(columns);
+
         return results.Take(maxResults).ToList();
     }
 

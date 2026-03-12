@@ -619,6 +619,16 @@
                 var schemaNodeId = $"{dbNodeId}/schema-{r.SchemaName}";
                 visible.Add(schemaNodeId);
 
+                if (r.ObjectType == SchemaObjectType.Column)
+                {
+                    var tableNodeId = $"{schemaNodeId}/table-{r.TableId}";
+                    visible.Add($"{schemaNodeId}/tables");
+                    visible.Add(tableNodeId);
+                    visible.Add($"{tableNodeId}/cols");
+                    visible.Add($"{tableNodeId}/col-{r.ObjectId}");
+                    continue;
+                }
+
                 var (categorySegment, objectPrefix) = r.ObjectType switch
                 {
                     SchemaObjectType.Table           => ("tables", "table"),
@@ -679,7 +689,7 @@
 
                     schemaNode.IsExpanded = true;
 
-                    foreach (var result in schemaGroup)
+                    foreach (var result in schemaGroup.Where(r => r.ObjectType != SchemaObjectType.Column))
                     {
                         var categorySegment = result.ObjectType switch
                         {
@@ -694,6 +704,28 @@
                         var catNode = FindNodeByIdIn(schemaNode.Children, $"{schemaNodeId}/{categorySegment}");
                         if (catNode is not null)
                             catNode.IsExpanded = true;
+                    }
+
+                    // Column results: expand Tables category → parent table (lazy-loads columns) → Columns category
+                    foreach (var tableGroup in schemaGroup
+                        .Where(r => r.ObjectType == SchemaObjectType.Column)
+                        .GroupBy(r => r.TableId))
+                    {
+                        var tablesCatNode = FindNodeByIdIn(schemaNode.Children, $"{schemaNodeId}/tables");
+                        if (tablesCatNode is not null)
+                            tablesCatNode.IsExpanded = true;
+
+                        var tableNodeId = $"{schemaNodeId}/table-{tableGroup.Key}";
+                        var tableNode = FindNodeByIdIn(schemaNode.Children, tableNodeId);
+                        if (tableNode is null) continue;
+
+                        // Expanding the table node lazy-loads its children (columns, indexes, etc.)
+                        if (!tableNode.IsExpanded)
+                            await HandleToggleExpand(tableNode);
+
+                        var colsCatNode = FindNodeByIdIn(tableNode.Children, $"{tableNodeId}/cols");
+                        if (colsCatNode is not null)
+                            colsCatNode.IsExpanded = true;
                     }
                 }
             }

@@ -317,7 +317,8 @@ public enum SchemaObjectType
     Table,
     View,
     StoredProcedure,
-    Function
+    Function,
+    Column
 }
 
 public class SchemaObjectSearchResult
@@ -330,5 +331,8 @@ public class SchemaObjectSearchResult
     public string ObjectName { get; set; } = string.Empty;
     public int ObjectId { get; set; }
     public SchemaObjectType ObjectType { get; set; }
+    // Populated for Column results only
+    public int TableId { get; set; }
+    public string TableName { get; set; } = string.Empty;
 }
 

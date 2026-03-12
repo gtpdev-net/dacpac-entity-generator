@@ -157,6 +157,10 @@ public class DataManagerDbContext : DbContext
             e.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
             e.HasIndex(x => new { x.TableId, x.ColumnName }).IsUnique()
                 .HasDatabaseName("UQ_SourceColumns_TableColumn");
+            // Narrow covering index for search: key on name, include FK for ordering join
+            e.HasIndex(x => x.ColumnName)
+                .HasDatabaseName("IX_SourceColumns_ColumnName")
+                .IncludeProperties(x => x.TableId);
             // Filtered covering index for the entity-generation query:
             //   WHERE IsActive = 1 AND IsSelectedForLoad = 1 AND PersistenceType != 'D'
             //   ORDER BY TableId, SortOrder
