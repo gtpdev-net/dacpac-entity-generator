@@ -1,4 +1,5 @@
 @inject IDataManagerRepository Repository
+@implements IDisposable
 
 <div class="tree-panel">
     <!-- Toolbar -->
@@ -7,11 +8,16 @@
                class="form-control form-control-sm"
                placeholder="Search…"
                value="@_searchFilter"
-               @oninput="HandleSearchInput" />
+               @oninput="HandleSearchInput"
+               @onkeydown="HandleSearchKeyDown" />
         <div class="d-flex gap-1 mt-1">
             <button class="btn btn-outline-secondary btn-sm flex-grow-1" @onclick="ExpandAll" title="Expand All">+</button>
             <button class="btn btn-outline-secondary btn-sm flex-grow-1" @onclick="CollapseAll" title="Collapse All">−</button>
             <button class="btn btn-outline-secondary btn-sm flex-grow-1" @onclick="Refresh" title="Refresh">↻</button>
+            @if (_searching)
+            {
+                <span class="spinner-border spinner-border-sm text-secondary ms-1 mt-1" role="status"></span>
+            }
             <div class="form-check form-switch mt-1 ms-1 me-0">
                 <input class="form-check-input" type="checkbox" id="showInactiveToggle"
                        checked="@_showInactive"
@@ -41,6 +47,10 @@
         {
             <p class="text-muted small p-2">No servers found.</p>
         }
+        else if (!string.IsNullOrWhiteSpace(_searchFilter) && _visibleNodeIds != null && _visibleNodeIds.Count == 0)
+        {
+            <p class="text-muted small p-2">No matches for "<strong>@_searchFilter</strong>".</p>
+        }
         else
         {
             @foreach (var node in _rootNodes)
@@ -50,7 +60,7 @@
                                 OnToggleExpand="HandleToggleExpand"
                                 Depth="0"
                                 ShowInactive="@_showInactive"
-                                IsVisible="@IsNodeVisible(node)" />
+                                VisibleNodeIds="@_visibleNodeIds" />
             }
         }
     </div>
@@ -65,6 +75,9 @@
     private TreeNode? _selectedNode;
     private bool _loading = true;
     private string? _error;
+    private HashSet<string>? _visibleNodeIds;
+    private bool _searching;
+    private CancellationTokenSource? _searchCts;
 
     // For restoring expand state after clearing search
     private HashSet<string> _preFilterExpandedIds = new();
@@ -532,26 +545,159 @@
 
     // ── Search / filter ──────────────────────────────────────────────────────
 
-    private void HandleSearchInput(ChangeEventArgs e)
+    private async Task HandleSearchInput(ChangeEventArgs e)
     {
         var newFilter = e.Value?.ToString() ?? string.Empty;
 
-        if (!string.IsNullOrWhiteSpace(_searchFilter) && string.IsNullOrWhiteSpace(newFilter))
+        _searchCts?.Cancel();
+        _searchCts?.Dispose();
+        _searchCts = null;
+
+        if (string.IsNullOrWhiteSpace(newFilter))
         {
-            // Clearing filter — restore saved expand state
+            _searchFilter = string.Empty;
+            _visibleNodeIds = null;
             RestoreExpandState(_rootNodes);
+            return;
         }
-        else if (string.IsNullOrWhiteSpace(_searchFilter) && !string.IsNullOrWhiteSpace(newFilter))
+
+        if (string.IsNullOrWhiteSpace(_searchFilter))
         {
-            // Starting filter — save current expand state
             _preFilterExpandedIds = new HashSet<string>();
             CaptureExpandState(_rootNodes, _preFilterExpandedIds);
         }
 
         _searchFilter = newFilter;
 
-        if (!string.IsNullOrWhiteSpace(_searchFilter))
-            ApplySearchFilter(_rootNodes, _searchFilter);
+        var cts = new CancellationTokenSource();
+        _searchCts = cts;
+
+        try
+        {
+            await Task.Delay(300, cts.Token);
+            await ExecuteSearchAsync(newFilter, cts.Token);
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private void HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            _searchCts?.Cancel();
+            _searchCts?.Dispose();
+            _searchCts = null;
+            _searchFilter = string.Empty;
+            _visibleNodeIds = null;
+            RestoreExpandState(_rootNodes);
+        }
+    }
+
+    private async Task ExecuteSearchAsync(string searchTerm, CancellationToken ct)
+    {
+        _searching = true;
+        StateHasChanged();
+        try
+        {
+            var results = await Repository.SearchSchemaObjectsAsync(searchTerm);
+            ct.ThrowIfCancellationRequested();
+
+            var visible = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var r in results)
+            {
+                var serverNodeId = $"server-{r.ServerId}";
+                visible.Add(serverNodeId);
+
+                if (r.ObjectType == SchemaObjectType.Server) continue;
+
+                var dbNodeId = $"{serverNodeId}/db-{r.DatabaseId}";
+                visible.Add(dbNodeId);
+
+                if (r.ObjectType == SchemaObjectType.Database) continue;
+
+                var schemaNodeId = $"{dbNodeId}/schema-{r.SchemaName}";
+                visible.Add(schemaNodeId);
+
+                var (categorySegment, objectPrefix) = r.ObjectType switch
+                {
+                    SchemaObjectType.Table           => ("tables", "table"),
+                    SchemaObjectType.View            => ("views", "view"),
+                    SchemaObjectType.StoredProcedure => ("procs", "proc"),
+                    SchemaObjectType.Function        => ("funcs", "func"),
+                    _                                => ((string?)null, (string?)null)
+                };
+
+                if (categorySegment is null) continue;
+
+                visible.Add($"{schemaNodeId}/{categorySegment}");
+                visible.Add($"{schemaNodeId}/{objectPrefix}-{r.ObjectId}");
+            }
+
+            _visibleNodeIds = visible;
+
+            if (results.Count > 0)
+                await ExpandForSearchResultsAsync(results);
+        }
+        finally
+        {
+            _searching = false;
+        }
+    }
+
+    private async Task ExpandForSearchResultsAsync(IReadOnlyList<SchemaObjectSearchResult> results)
+    {
+        foreach (var serverGroup in results.GroupBy(r => r.ServerId))
+        {
+            var serverNodeId = $"server-{serverGroup.Key}";
+            var serverNode = FindNodeByIdIn(_rootNodes, serverNodeId);
+            if (serverNode is null) continue;
+
+            var needsDbExpand = serverGroup.Any(r => r.ObjectType != SchemaObjectType.Server);
+            if (needsDbExpand && !serverNode.IsExpanded)
+                await HandleToggleExpand(serverNode);
+
+            foreach (var dbGroup in serverGroup
+                .Where(r => r.ObjectType != SchemaObjectType.Server)
+                .GroupBy(r => r.DatabaseId))
+            {
+                var dbNodeId = $"{serverNodeId}/db-{dbGroup.Key}";
+                var dbNode = FindNodeByIdIn(serverNode.Children, dbNodeId);
+                if (dbNode is null) continue;
+
+                // Expanding a DB node loads the full schema/category/object subtree eagerly
+                if (!dbNode.IsExpanded)
+                    await HandleToggleExpand(dbNode);
+
+                foreach (var schemaGroup in dbGroup
+                    .Where(r => r.ObjectType != SchemaObjectType.Database)
+                    .GroupBy(r => r.SchemaName))
+                {
+                    var schemaNodeId = $"{dbNodeId}/schema-{schemaGroup.Key}";
+                    var schemaNode = FindNodeByIdIn(dbNode.Children, schemaNodeId);
+                    if (schemaNode is null) continue;
+
+                    schemaNode.IsExpanded = true;
+
+                    foreach (var result in schemaGroup)
+                    {
+                        var categorySegment = result.ObjectType switch
+                        {
+                            SchemaObjectType.Table           => "tables",
+                            SchemaObjectType.View            => "views",
+                            SchemaObjectType.StoredProcedure => "procs",
+                            SchemaObjectType.Function        => "funcs",
+                            _                                => null
+                        };
+                        if (categorySegment is null) continue;
+
+                        var catNode = FindNodeByIdIn(schemaNode.Children, $"{schemaNodeId}/{categorySegment}");
+                        if (catNode is not null)
+                            catNode.IsExpanded = true;
+                    }
+                }
+            }
+        }
     }
 
     private void CaptureExpandState(IEnumerable<TreeNode> nodes, HashSet<string> ids)
@@ -572,38 +718,10 @@
         }
     }
 
-    /// <summary>
-    /// Returns true if any descendant of this node matches the filter.
-    /// Also sets IsExpanded on ancestors of matching nodes.
-    /// </summary>
-    private bool ApplySearchFilter(IEnumerable<TreeNode> nodes, string filter)
+    public void Dispose()
     {
-        bool anyVisible = false;
-        foreach (var node in nodes)
-        {
-            bool selfMatches = node.Label.Contains(filter, StringComparison.OrdinalIgnoreCase);
-            bool childMatches = ApplySearchFilter(node.Children, filter);
-
-            if (selfMatches || childMatches)
-            {
-                if (childMatches) node.IsExpanded = true;
-                anyVisible = true;
-            }
-        }
-        return anyVisible;
-    }
-
-    private bool IsNodeVisible(TreeNode node)
-    {
-        if (string.IsNullOrWhiteSpace(_searchFilter)) return true;
-
-        return NodeOrDescendantMatches(node, _searchFilter);
-    }
-
-    private bool NodeOrDescendantMatches(TreeNode node, string filter)
-    {
-        if (node.Label.Contains(filter, StringComparison.OrdinalIgnoreCase)) return true;
-        return node.Children.Any(c => NodeOrDescendantMatches(c, filter));
+        _searchCts?.Cancel();
+        _searchCts?.Dispose();
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

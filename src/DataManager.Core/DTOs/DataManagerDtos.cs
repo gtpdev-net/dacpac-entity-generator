@@ -308,3 +308,27 @@ public class TargetServerOption
     public string ServerName { get; set; } = string.Empty;
 }
 
+// ── Search DTOs ───────────────────────────────────────────────────────────────
+
+public enum SchemaObjectType
+{
+    Server,
+    Database,
+    Table,
+    View,
+    StoredProcedure,
+    Function
+}
+
+public class SchemaObjectSearchResult
+{
+    public int ServerId { get; set; }
+    public string ServerName { get; set; } = string.Empty;
+    public int DatabaseId { get; set; }
+    public string DatabaseName { get; set; } = string.Empty;
+    public string SchemaName { get; set; } = string.Empty;
+    public string ObjectName { get; set; } = string.Empty;
+    public int ObjectId { get; set; }
+    public SchemaObjectType ObjectType { get; set; }
+}
+

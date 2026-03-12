@@ -105,6 +105,10 @@ public class DataManagerDbContext : DbContext
             e.Property(x => x.LastImportedModelHash).HasMaxLength(64);
             e.HasIndex(x => new { x.ServerId, x.DatabaseName }).IsUnique()
                 .HasDatabaseName("UQ_SourceDatabases_ServerDb");
+            // Narrow covering index for search: key on name, include FK for ordering join
+            e.HasIndex(x => x.DatabaseName)
+                .HasDatabaseName("IX_SourceDatabases_DatabaseName")
+                .IncludeProperties(x => x.ServerId);
             e.HasOne(x => x.Server)
                 .WithMany(s => s.Databases)
                 .HasForeignKey(x => x.ServerId)
@@ -123,6 +127,10 @@ public class DataManagerDbContext : DbContext
             e.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
             e.HasIndex(x => new { x.DatabaseId, x.SchemaName, x.TableName }).IsUnique()
                 .HasDatabaseName("UQ_SourceTables_SchemaTable");
+            // Narrow covering index for search: key on name, include FK and schema for ordering join
+            e.HasIndex(x => x.TableName)
+                .HasDatabaseName("IX_SourceTables_TableName")
+                .IncludeProperties(x => new { x.DatabaseId, x.SchemaName });
             e.HasOne(x => x.Database)
                 .WithMany(d => d.Tables)
                 .HasForeignKey(x => x.DatabaseId)
@@ -286,6 +294,11 @@ public class DataManagerDbContext : DbContext
             e.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
             e.HasIndex(x => new { x.DatabaseId, x.SchemaName, x.ViewName }).IsUnique()
                 .HasDatabaseName("UQ_SourceViews_DbSchemaView");
+            // Narrow covering index for search: key on name, include FK and schema for ordering join
+            // Avoids scanning the wide clustered index that includes the SqlBody nvarchar(max) column
+            e.HasIndex(x => x.ViewName)
+                .HasDatabaseName("IX_SourceViews_ViewName")
+                .IncludeProperties(x => new { x.DatabaseId, x.SchemaName });
             e.HasOne(x => x.Database)
                 .WithMany(d => d.Views)
                 .HasForeignKey(x => x.DatabaseId)
@@ -316,6 +329,11 @@ public class DataManagerDbContext : DbContext
             e.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
             e.HasIndex(x => new { x.DatabaseId, x.SchemaName, x.ProcedureName }).IsUnique()
                 .HasDatabaseName("UQ_SourceStoredProcedures_DbSchemaProc");
+            // Narrow covering index for search: key on name, include FK and schema for ordering join
+            // Avoids scanning the wide clustered index that includes the SqlBody nvarchar(max) column
+            e.HasIndex(x => x.ProcedureName)
+                .HasDatabaseName("IX_SourceStoredProcedures_ProcedureName")
+                .IncludeProperties(x => new { x.DatabaseId, x.SchemaName });
             e.HasOne(x => x.Database)
                 .WithMany(d => d.StoredProcedures)
                 .HasForeignKey(x => x.DatabaseId)
@@ -349,6 +367,11 @@ public class DataManagerDbContext : DbContext
             e.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
             e.HasIndex(x => new { x.DatabaseId, x.SchemaName, x.FunctionName }).IsUnique()
                 .HasDatabaseName("UQ_SourceFunctions_DbSchemaFunc");
+            // Narrow covering index for search: key on name, include FK and schema for ordering join
+            // Avoids scanning the wide clustered index that includes the SqlBody nvarchar(max) column
+            e.HasIndex(x => x.FunctionName)
+                .HasDatabaseName("IX_SourceFunctions_FunctionName")
+                .IncludeProperties(x => new { x.DatabaseId, x.SchemaName });
             e.HasOne(x => x.Database)
                 .WithMany(d => d.Functions)
                 .HasForeignKey(x => x.DatabaseId)

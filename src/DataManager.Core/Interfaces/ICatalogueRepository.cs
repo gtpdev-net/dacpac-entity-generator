@@ -130,5 +130,8 @@ public interface IDataManagerRepository
     // --- CopyActivityLog ---
     Task LogCopySuccessAsync(LogCopySuccessParams parameters);
     Task LogCopyFailureAsync(LogCopyFailureParams parameters);
+
+    // --- Search ---
+    Task<IReadOnlyList<SchemaObjectSearchResult>> SearchSchemaObjectsAsync(string searchTerm, int maxResults = 50);
 }
 

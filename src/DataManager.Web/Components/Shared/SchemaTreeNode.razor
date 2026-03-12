@@ -1,6 +1,6 @@
 @if (Node is null) { return; }
 @if (!ShowInactive && Node.IsActive == false) { return; }
-@if (!IsVisible) { return; }
+@if (VisibleNodeIds is not null && !VisibleNodeIds.Contains(Node.Id)) { return; }
 
 <div class="tree-node @(Node.IsSelected ? "tree-node--selected" : "")"
      style="padding-left: @(Depth * 20)px">
@@ -43,7 +43,8 @@
                         OnNodeSelected="OnNodeSelected"
                         OnToggleExpand="OnToggleExpand"
                         Depth="@(Depth + 1)"
-                        ShowInactive="ShowInactive" />
+                        ShowInactive="ShowInactive"
+                        VisibleNodeIds="@VisibleNodeIds" />
     }
 }
 
@@ -54,8 +55,8 @@
     [Parameter] public int Depth { get; set; } = 0;
     [Parameter] public bool ShowInactive { get; set; } = true;
 
-    // Visibility is set by the parent panel during search filtering
-    [Parameter] public bool IsVisible { get; set; } = true;
+    // When non-null, only nodes whose Id is in this set are rendered (used during search)
+    [Parameter] public HashSet<string>? VisibleNodeIds { get; set; }
 
     private bool HasChildren =>
         Node.ChildCount > 0 ||

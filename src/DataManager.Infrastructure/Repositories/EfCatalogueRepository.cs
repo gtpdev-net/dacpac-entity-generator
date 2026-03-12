@@ -463,6 +463,136 @@ public class EfDataManagerRepository : IDataManagerRepository
             && (excludeColumnId == null || c.ColumnId != excludeColumnId.Value));
     }
 
+    // ── Search ───────────────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<SchemaObjectSearchResult>> SearchSchemaObjectsAsync(
+        string searchTerm, int maxResults = 50)
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm))
+            return Array.Empty<SchemaObjectSearchResult>();
+
+        using var db = _factory.CreateDbContext();
+        var results = new List<SchemaObjectSearchResult>();
+
+        var servers = await db.Servers
+            .Where(s => s.ServerName.Contains(searchTerm))
+            .OrderBy(s => s.ServerName)
+            .Take(maxResults)
+            .Select(s => new SchemaObjectSearchResult
+            {
+                ServerId = s.ServerId,
+                ServerName = s.ServerName,
+                ObjectName = s.ServerName,
+                ObjectId = s.ServerId,
+                ObjectType = SchemaObjectType.Server
+            })
+            .ToListAsync();
+        results.AddRange(servers);
+
+        var databases = await db.SourceDatabases
+            .Where(d => d.DatabaseName.Contains(searchTerm))
+            .OrderBy(d => d.Server.ServerName).ThenBy(d => d.DatabaseName)
+            .Take(maxResults)
+            .Select(d => new SchemaObjectSearchResult
+            {
+                ServerId = d.ServerId,
+                ServerName = d.Server.ServerName,
+                DatabaseId = d.DatabaseId,
+                DatabaseName = d.DatabaseName,
+                ObjectName = d.DatabaseName,
+                ObjectId = d.DatabaseId,
+                ObjectType = SchemaObjectType.Database
+            })
+            .ToListAsync();
+        results.AddRange(databases);
+
+        var tables = await db.SourceTables
+            .Where(t => t.TableName.Contains(searchTerm))
+            .OrderBy(t => t.Database.Server.ServerName)
+                .ThenBy(t => t.Database.DatabaseName)
+                .ThenBy(t => t.SchemaName)
+                .ThenBy(t => t.TableName)
+            .Take(maxResults)
+            .Select(t => new SchemaObjectSearchResult
+            {
+                ServerId = t.Database.ServerId,
+                ServerName = t.Database.Server.ServerName,
+                DatabaseId = t.DatabaseId,
+                DatabaseName = t.Database.DatabaseName,
+                SchemaName = t.SchemaName,
+                ObjectName = t.TableName,
+                ObjectId = t.TableId,
+                ObjectType = SchemaObjectType.Table
+            })
+            .ToListAsync();
+        results.AddRange(tables);
+
+        var views = await db.SourceViews
+            .Where(v => v.ViewName.Contains(searchTerm))
+            .OrderBy(v => v.Database.Server.ServerName)
+                .ThenBy(v => v.Database.DatabaseName)
+                .ThenBy(v => v.SchemaName)
+                .ThenBy(v => v.ViewName)
+            .Take(maxResults)
+            .Select(v => new SchemaObjectSearchResult
+            {
+                ServerId = v.Database.ServerId,
+                ServerName = v.Database.Server.ServerName,
+                DatabaseId = v.DatabaseId,
+                DatabaseName = v.Database.DatabaseName,
+                SchemaName = v.SchemaName,
+                ObjectName = v.ViewName,
+                ObjectId = v.SourceViewId,
+                ObjectType = SchemaObjectType.View
+            })
+            .ToListAsync();
+        results.AddRange(views);
+
+        var procs = await db.SourceStoredProcedures
+            .Where(p => p.ProcedureName.Contains(searchTerm))
+            .OrderBy(p => p.Database.Server.ServerName)
+                .ThenBy(p => p.Database.DatabaseName)
+                .ThenBy(p => p.SchemaName)
+                .ThenBy(p => p.ProcedureName)
+            .Take(maxResults)
+            .Select(p => new SchemaObjectSearchResult
+            {
+                ServerId = p.Database.ServerId,
+                ServerName = p.Database.Server.ServerName,
+                DatabaseId = p.DatabaseId,
+                DatabaseName = p.Database.DatabaseName,
+                SchemaName = p.SchemaName,
+                ObjectName = p.ProcedureName,
+                ObjectId = p.SourceStoredProcedureId,
+                ObjectType = SchemaObjectType.StoredProcedure
+            })
+            .ToListAsync();
+        results.AddRange(procs);
+
+        var funcs = await db.SourceFunctions
+            .Where(f => f.FunctionName.Contains(searchTerm))
+            .OrderBy(f => f.Database.Server.ServerName)
+                .ThenBy(f => f.Database.DatabaseName)
+                .ThenBy(f => f.SchemaName)
+                .ThenBy(f => f.FunctionName)
+            .Take(maxResults)
+            .Select(f => new SchemaObjectSearchResult
+            {
+                ServerId = f.Database.ServerId,
+                ServerName = f.Database.Server.ServerName,
+                DatabaseId = f.DatabaseId,
+                DatabaseName = f.Database.DatabaseName,
+                SchemaName = f.SchemaName,
+                ObjectName = f.FunctionName,
+                ObjectId = f.SourceFunctionId,
+                ObjectType = SchemaObjectType.Function
+            })
+            .ToListAsync();
+        results.AddRange(funcs);
+
+        return results.Take(maxResults).ToList();
+    }
+
     // ── Views ────────────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<SourceViewSummary>> GetViewsAsync(int databaseId)
