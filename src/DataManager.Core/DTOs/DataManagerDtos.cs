@@ -299,7 +299,7 @@ public class MigrationConfigLoadResult
     public int Inserted { get; set; }
     public int Updated { get; set; }
     public int Unchanged { get; set; }
-    public int Deactivated { get; set; }
+    public int Deleted { get; set; }
     public int TotalTablesEvaluated { get; set; }
 }
 

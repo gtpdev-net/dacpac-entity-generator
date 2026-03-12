@@ -44,12 +44,6 @@
                     SelectedValues="_selectedDestSchemas"
                     SelectedValuesChanged="v => { _selectedDestSchemas = v; _page = 1; }" />
             </div>
-            <div class="col-md-2">
-                <MultiSelectFilterDropdown Label="Active"
-                    AvailableOptions="@(new List<string> { "Yes", "No" })"
-                    SelectedValues="_selectedActive"
-                    SelectedValuesChanged="v => { _selectedActive = v; _page = 1; }" />
-            </div>
         </div>
     </div>
 </div>
@@ -121,7 +115,8 @@
     <div class="alert alert-info alert-dismissible fade show py-2 mb-2" role="alert">
         Load complete — <strong>@_loadResult.Inserted</strong> inserted,
         <strong>@_loadResult.Updated</strong> updated,
-        <strong>@_loadResult.Unchanged</strong> unchanged
+        <strong>@_loadResult.Unchanged</strong> unchanged,
+        <strong>@_loadResult.Deleted</strong> deleted
         (evaluated <strong>@_loadResult.TotalTablesEvaluated</strong> tables).
         <button type="button" class="btn-close" @onclick="() => _loadResult = null"></button>
     </div>
@@ -159,7 +154,6 @@ else
                     </th>
                     <th>Columns</th>
                     <th>Filter Condition</th>
-                    <th>Active</th>
                     <th>Modified</th>
                 </tr>
             </thead>
@@ -223,10 +217,6 @@ else
                                    value="@row.FilterCondition"
                                    @onchange="async e => await SaveTextField(row, r => r.FilterCondition = e.Value?.ToString(), e.Value?.ToString())" />
                         </td>
-                        <td class="text-center">
-                            <input type="checkbox" checked="@row.IsActive"
-                                   @onchange="async () => await ToggleIsActive(row)" />
-                        </td>
                         <td class="small text-muted">@row.ModifiedAt?.ToString("dd MMM yy")</td>
                     </tr>
                 }
@@ -273,7 +263,6 @@ else
     private HashSet<string> _selectedSourceSchemas   = new(StringComparer.OrdinalIgnoreCase);
     private HashSet<string> _selectedSourceTables    = new(StringComparer.OrdinalIgnoreCase);
     private HashSet<string> _selectedDestSchemas     = new(StringComparer.OrdinalIgnoreCase);
-    private HashSet<string> _selectedActive          = new(StringComparer.OrdinalIgnoreCase);
 
     private string _sortBy  = "srcdatabase";
     private bool   _sortAsc = true;
@@ -287,7 +276,7 @@ else
 
     private async Task LoadData()
     {
-        var items = await Repository.GetMigrationConfigsAsync(includeInactive: true);
+        var items = await Repository.GetMigrationConfigsAsync(includeInactive: false);
         _all = items.ToList();
 
         var targets = await Repository.GetServersByRoleAsync(ServerRole.Target, includeInactive: false);
@@ -341,8 +330,6 @@ else
             q = q.Where(r => _selectedSourceTables.Contains(r.SourceTableName));
         if (excludeField != "destschema"  && _selectedDestSchemas.Count > 0)
             q = q.Where(r => _selectedDestSchemas.Contains(r.DestinationSchema));
-        if (excludeField != "active"      && _selectedActive.Count > 0)
-            q = q.Where(r => _selectedActive.Contains(r.IsActive ? "Yes" : "No"));
         return q;
     }
 
@@ -362,8 +349,6 @@ else
                 q = q.Where(r => _selectedSourceTables.Contains(r.SourceTableName));
             if (_selectedDestSchemas.Count > 0)
                 q = q.Where(r => _selectedDestSchemas.Contains(r.DestinationSchema));
-            if (_selectedActive.Count > 0)
-                q = q.Where(r => _selectedActive.Contains(r.IsActive ? "Yes" : "No"));
             return ApplySort(q.ToList());
         }
     }
@@ -433,18 +418,6 @@ else
             var idx = _all!.FindIndex(r => r.MigrationConfigId == dto.MigrationConfigId);
             if (idx >= 0) _all[idx] = updated;
         }
-    }
-
-    private async Task ToggleIsActive(MigrationConfigInfo dto)
-    {
-        var entity = await Repository.GetMigrationConfigByIdAsync(dto.MigrationConfigId);
-        if (entity is null) return;
-        entity.IsActive    = !entity.IsActive;
-        entity.ModifiedAt  = DateTime.UtcNow;
-        entity.ModifiedBy  = "user";
-        await Repository.UpdateMigrationConfigAsync(entity);
-        dto.IsActive = entity.IsActive;
-        dto.ModifiedAt = entity.ModifiedAt;
     }
 
     private async Task ApplyGlobalDestination()

@@ -19,8 +19,7 @@ public class MigrationConfigLoadService
     /// where IsSelectedForLoad = true AND PersistenceType IN ('R', 'B').
     /// Upserts: auto-derived fields are always refreshed; user-edited fields are preserved
     /// (DestinationServer, DestinationDatabase, FilterCondition).
-    /// Tables that no longer qualify are deactivated (IsActive = false) so that
-    /// ADF incremental queries (WHERE ModifiedAt >= @date) detect the removal.
+    /// Tables that no longer qualify have their MigrationConfig row deleted.
     /// </summary>
     public async Task<MigrationConfigLoadResult> LoadMigrationConfigsAsync()
     {
@@ -68,10 +67,7 @@ public class MigrationConfigLoadService
 
             if (existingMap.TryGetValue(table.TableId, out var existing))
             {
-                // Re-activation counts as a change: always refresh computed fields and
-                // bump ModifiedAt so ADF incremental queries see the row again.
-                var changed = !existing.IsActive                    ||
-                              existing.SourceServer      != srcServer   ||
+                var changed = existing.SourceServer      != srcServer   ||
                               existing.SourceDatabase    != srcDatabase ||
                               existing.SourceSchema      != srcSchema   ||
                               existing.SourceTableName   != srcTable    ||
@@ -81,7 +77,6 @@ public class MigrationConfigLoadService
 
                 if (changed)
                 {
-                    existing.IsActive          = true;
                     existing.SourceServer      = srcServer;
                     existing.SourceDatabase    = srcDatabase;
                     existing.SourceSchema      = srcSchema;
@@ -121,16 +116,13 @@ public class MigrationConfigLoadService
             }
         }
 
-        // Deactivate configs whose table no longer qualifies.
-        // Setting ModifiedAt ensures ADF incremental queries detect the removal.
+        // Delete configs whose table no longer qualifies.
         foreach (var (tableId, stale) in existingMap)
         {
-            if (!qualifyingTableIds.Contains(tableId) && stale.IsActive)
+            if (!qualifyingTableIds.Contains(tableId))
             {
-                stale.IsActive   = false;
-                stale.ModifiedAt = now;
-                stale.ModifiedBy = "system";
-                result.Deactivated++;
+                db.MigrationConfigs.Remove(stale);
+                result.Deleted++;
             }
         }
 
@@ -139,7 +131,7 @@ public class MigrationConfigLoadService
     }
 
     /// <summary>
-    /// Refreshes (or creates / deactivates) the MigrationConfig for a single table.
+    /// Refreshes (or creates / deletes) the MigrationConfig for a single table.
     /// Called automatically whenever a column's IsSelectedForLoad or PersistenceType
     /// changes on the catalogue page, so the ADF pipeline's incremental watermark
     /// (WHERE ModifiedAt >= @date) immediately reflects the change.
@@ -181,8 +173,7 @@ public class MigrationConfigLoadService
 
             if (existing is not null)
             {
-                var changed = !existing.IsActive                    ||
-                              existing.SourceServer      != srcServer   ||
+                var changed = existing.SourceServer      != srcServer   ||
                               existing.SourceDatabase    != srcDatabase ||
                               existing.SourceSchema      != srcSchema   ||
                               existing.SourceTableName   != srcTable    ||
@@ -192,7 +183,6 @@ public class MigrationConfigLoadService
 
                 if (changed)
                 {
-                    existing.IsActive          = true;
                     existing.SourceServer      = srcServer;
                     existing.SourceDatabase    = srcDatabase;
                     existing.SourceSchema      = srcSchema;
@@ -225,12 +215,10 @@ public class MigrationConfigLoadService
                 });
             }
         }
-        else if (existing is not null && existing.IsActive)
+        else if (existing is not null)
         {
-            // No qualifying columns remain — deactivate so ADF picks up the change.
-            existing.IsActive   = false;
-            existing.ModifiedAt = now;
-            existing.ModifiedBy = "system";
+            // No qualifying columns remain — delete the config row.
+            db.MigrationConfigs.Remove(existing);
         }
 
         await db.SaveChangesAsync();
