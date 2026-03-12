@@ -46,11 +46,7 @@ else
     <h6>SQL Body</h6>
     <SqlCodeBlock SqlBody="@_proc.SqlBody" />
 
-    @if (_sourceId.HasValue)
-    {
-        <a class="btn btn-sm btn-outline-primary mt-2"
-           href="/servers/@_sourceId/databases/@_proc.DatabaseId/schema/storedprocedures/@EntityId">Open Full Page →</a>
-    }
+
 }
 
 @code {

@@ -21,11 +21,10 @@ else
         </span>
     </h5>
 
-    @if (_tableId.HasValue && _sourceId.HasValue && _databaseId.HasValue)
+    @if (_tableId.HasValue)
     {
         <p class="small">
-            <span class="text-muted me-1">Parent Table:</span>
-            <a href="/servers/@_sourceId/databases/@_databaseId/tables/@_tableId/edit">@_tableName</a>
+            <span class="text-muted me-1">Parent Table:</span>@_tableName
         </p>
     }
 

@@ -1,5 +1,5 @@
-@page "/servers/{ServerId:int}/target-databases/new"
-@page "/servers/{ServerId:int}/target-databases/{DatabaseId:int}/edit"
+@page "/targets/{ServerId:int}/databases/new"
+@page "/targets/{ServerId:int}/databases/{DatabaseId:int}/edit"
 @rendermode InteractiveServer
 @inject IDataManagerRepository Repository
 @inject NavigationManager Nav
@@ -36,7 +36,7 @@
     </div>
     <div class="col-12">
         <button type="submit" class="btn btn-primary me-2">Save</button>
-        <a href="/servers/@ServerId/target-databases" class="btn btn-secondary">Cancel</a>
+        <a href="/targets/@ServerId/databases" class="btn btn-secondary">Cancel</a>
     </div>
 
     @if (!_isNew)
@@ -62,8 +62,8 @@
 
         _breadcrumbs =
         [
-            new BreadcrumbItem("Servers", "/servers"),
-            new BreadcrumbItem(serverName, $"/servers/{ServerId}/target-databases"),
+            new BreadcrumbItem("Targets", "/targets"),
+            new BreadcrumbItem(serverName, $"/targets/{ServerId}/databases"),
             new BreadcrumbItem(_isNew ? "New" : "Edit", isActive: true)
         ];
 
@@ -94,6 +94,6 @@
         }
 
         Notify.Success("Database saved.");
-        Nav.NavigateTo($"/servers/{ServerId}/target-databases");
+        Nav.NavigateTo($"/targets/{ServerId}/databases");
     }
 }

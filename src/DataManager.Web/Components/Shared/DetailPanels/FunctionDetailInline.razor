@@ -34,11 +34,7 @@ else
     <h6>SQL Body</h6>
     <SqlCodeBlock SqlBody="@_function.SqlBody" />
 
-    @if (_sourceId.HasValue)
-    {
-        <a class="btn btn-sm btn-outline-primary mt-2"
-           href="/servers/@_sourceId/databases/@_function.DatabaseId/schema/functions/@EntityId">Open Full Page →</a>
-    }
+
 }
 
 @code {

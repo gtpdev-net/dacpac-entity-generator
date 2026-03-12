@@ -1,15 +1,15 @@
-@page "/servers"
+@page "/targets"
 @rendermode InteractiveServer
 @inject IDataManagerRepository Repository
 @inject NavigationManager Nav
 @inject NotificationService Notify
 @inject IConfiguration Configuration
 
-<PageTitle>Servers &mdash; @Configuration["AppTitle"] Migration</PageTitle>
+<PageTitle>Target Servers &amp; Databases &mdash; @Configuration["AppTitle"] Migration</PageTitle>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h1>Servers</h1>
-    <a href="/servers/new" class="btn btn-primary">Add New Server</a>
+    <h1>Target Servers &amp; Databases</h1>
+    <a href="/targets/new" class="btn btn-primary">Add Target Server</a>
 </div>
 
 <div class="mb-3">
@@ -30,7 +30,6 @@ else
     <PaginatedTable TItem="Server" Items="filtered" PageSize="25">
         <HeaderTemplate>
             <th>Server Name</th>
-            <th>Role</th>
             <th>Connection</th>
             <th>Description</th>
             <th># Databases</th>
@@ -40,24 +39,7 @@ else
         </HeaderTemplate>
         <RowTemplate Context="src">
             <td>
-                @if (src.Role == DataManager.Core.Models.Entities.ServerRole.Target)
-                {
-                    <a href="/servers/@src.ServerId/target-databases">@src.ServerName</a>
-                }
-                else
-                {
-                    <a href="/servers/@src.ServerId/databases">@src.ServerName</a>
-                }
-            </td>
-            <td>
-                @if (src.Role == DataManager.Core.Models.Entities.ServerRole.Target)
-                {
-                    <span class="badge bg-warning text-dark">Target</span>
-                }
-                else
-                {
-                    <span class="badge bg-primary">Source</span>
-                }
+                <a href="/targets/@src.ServerId/databases">@src.ServerName</a>
             </td>
             <td class="text-muted small">
                 @if (src.Connection is not null && !string.IsNullOrWhiteSpace(src.Connection.Hostname))
@@ -70,23 +52,14 @@ else
                 }
             </td>
             <td>@src.Description</td>
-            <td>
-                @if (src.Role == DataManager.Core.Models.Entities.ServerRole.Target)
-                {
-                    @src.TargetDatabases.Count(d => d.IsActive)
-                }
-                else
-                {
-                    @src.Databases.Count(d => d.IsActive)
-                }
-            </td>
+            <td>@src.TargetDatabases.Count(d => d.IsActive)</td>
             <td>
                 <input type="checkbox" checked="@src.IsActive"
                        @onchange="() => ToggleActive(src)" />
             </td>
             <td>@(src.ModifiedAt?.ToString("dd MMM yyyy") ?? src.CreatedAt.ToString("dd MMM yyyy"))</td>
             <td>
-                <a href="/servers/@src.ServerId/edit" class="btn btn-sm btn-outline-secondary me-1">Edit</a>
+                <a href="/targets/@src.ServerId/edit" class="btn btn-sm btn-outline-secondary me-1">Edit</a>
                 <button class="btn btn-sm btn-outline-danger"
                         @onclick="() => Delete(src)">Delete</button>
             </td>
@@ -104,7 +77,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var list = await Repository.GetServersAsync(includeInactive: true);
+        var list = await Repository.GetServersByRoleAsync(DataManager.Core.Models.Entities.ServerRole.Target, includeInactive: true);
         _servers = list.ToList();
     }
 
@@ -117,7 +90,7 @@ else
 
     private async Task Delete(Server src)
     {
-        if (src.Databases.Any(d => d.IsActive))
+        if (src.TargetDatabases.Any(d => d.IsActive))
         {
             Notify.Warning("Cannot delete a server with active databases. Deactivate it instead.");
             return;

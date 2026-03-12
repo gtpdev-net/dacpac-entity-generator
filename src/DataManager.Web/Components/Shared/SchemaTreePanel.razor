@@ -82,7 +82,7 @@
         _error = null;
         try
         {
-            var sources = await Repository.GetServersAsync(includeInactive: true);
+            var sources = await Repository.GetServersByRoleAsync(DataManager.Core.Models.Entities.ServerRole.Source, includeInactive: true);
             var dbs = await Repository.GetInScopeDatabasesAsync(includeInactive: true);
             var dbsBySource = dbs.GroupBy(d => d.ServerId)
                                  .ToDictionary(g => g.Key, g => g.Count());
