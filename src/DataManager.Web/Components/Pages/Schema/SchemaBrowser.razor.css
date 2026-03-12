@@ -1,0 +1,29 @@
+.sb-split-container {
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
+    min-height: calc(100vh - 120px);
+}
+
+.sb-left {
+    flex: 0 0 33%;
+    min-width: 80px;
+    overflow: hidden;
+}
+
+.sb-divider {
+    flex-shrink: 0;
+    width: 8px;
+    margin: 0 -4px;
+    position: relative;
+    z-index: 10;
+    cursor: col-resize;
+    background: transparent;
+    user-select: none;
+}
+
+.sb-right {
+    flex: 1 1 0;
+    min-width: 80px;
+    overflow: hidden;
+}

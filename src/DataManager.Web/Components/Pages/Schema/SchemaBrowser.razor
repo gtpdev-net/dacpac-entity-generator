@@ -9,14 +9,17 @@
 
 <BreadcrumbNav Items="@_breadcrumbs" />
 
-<div class="row g-0" style="min-height: calc(100vh - 120px);">
+<div id="sb-container" class="sb-split-container">
     <!-- Tree Panel -->
-    <div class="col-12 col-lg-4">
+    <div id="sb-left" class="sb-left">
         <SchemaTreePanel @ref="_treePanel" OnNodeSelected="HandleNodeSelected" />
     </div>
 
+    <!-- Drag divider -->
+    <div id="sb-divider" class="sb-divider"></div>
+
     <!-- Detail Panel -->
-    <div class="col-12 col-lg-8">
+    <div id="sb-right" class="sb-right">
         <SchemaDetailPanel SelectedNode="@_selectedNode" />
     </div>
 </div>
@@ -37,11 +40,16 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && !string.IsNullOrWhiteSpace(Path) && _treePanel is not null)
+        if (firstRender)
         {
-            _lastPath = Path;
-            await DeepLinkAsync(Path);
-            StateHasChanged();
+            await JS.InvokeVoidAsync("splitterInterop.init", "sb-container", "sb-left", "sb-divider");
+
+            if (!string.IsNullOrWhiteSpace(Path) && _treePanel is not null)
+            {
+                _lastPath = Path;
+                await DeepLinkAsync(Path);
+                StateHasChanged();
+            }
         }
     }
 
