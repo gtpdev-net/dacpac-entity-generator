@@ -11,12 +11,26 @@
 
 @if (_result is not null)
 {
-    <div class="alert alert-success">
+    var hasIssues = _result.ColumnsNotFound > 0 || _result.TablesNotFound > 0 || _result.Warnings.Count > 0;
+    <div class="alert @(hasIssues ? "alert-warning" : "alert-success")">
         <strong>Import complete.</strong>
-        Tables added: @_result.TablesAdded &middot;
-        Columns added: @_result.ColumnsAdded &middot;
-        Updated: @_result.ColumnsUpdated &middot;
-        Skipped: @_result.ColumnsSkipped
+        Columns updated: @_result.ColumnsUpdated
+        @if (_result.ColumnsNotFound > 0)
+        {
+            <span class="ms-2 text-danger">&middot; @_result.ColumnsNotFound column(s) not found in schema &mdash; import DACPAC first.</span>
+        }
+        @if (_result.TablesNotFound > 0)
+        {
+            <span class="ms-2 text-danger">&middot; @_result.TablesNotFound table(s) not found in schema &mdash; import DACPAC first.</span>
+        }
+        @foreach (var w in _result.Warnings.Take(20))
+        {
+            <div class="text-warning small">@w</div>
+        }
+        @if (_result.Warnings.Count > 20)
+        {
+            <div class="text-warning small">&hellip; and @(_result.Warnings.Count - 20) more warning(s).</div>
+        }
         @foreach (var err in _result.Errors)
         {
             <div class="text-danger">@err</div>
@@ -24,18 +38,16 @@
     </div>
 }
 
+<div class="alert alert-info" role="alert">
+    <strong>Note:</strong> Excel import updates catalog flags only
+    (<em>PersistenceType</em>, <em>DAO Analysis</em>, <em>Added by API</em>, <em>Selected for Load</em>)
+    on columns that already exist in the schema. Import DACPAC first to populate schema data.
+</div>
+
 <div class="row g-3" style="max-width:700px">
     <div class="col-12">
         <label class="form-label">Excel File (.xlsx)</label>
         <InputFile OnChange="LoadFile" accept=".xlsx" class="form-control" />
-    </div>
-    <div class="col-md-6">
-        <label class="form-label">Conflict Strategy</label>
-        <select class="form-select" @bind="_strategy">
-            <option value="@ImportConflictStrategy.SkipExisting">Skip existing</option>
-            <option value="@ImportConflictStrategy.AddNewOnly">Overwrite existing</option>
-            <option value="@ImportConflictStrategy.FullSync">Merge intent flags only</option>
-        </select>
     </div>
     <div class="col-md-6 d-flex align-items-end">
         <div class="form-check mb-2">
@@ -94,7 +106,6 @@
 <ConfirmDialog @ref="_confirmDialog" Title="Confirm Import" ConfirmText="Import" />
 
 @code {
-    private ImportConflictStrategy _strategy = ImportConflictStrategy.SkipExisting;
     private bool _dryRun = true;
     private MemoryStream? _fileStream;
     private IReadOnlyList<ImportPreviewRow>? _preview;
@@ -130,7 +141,7 @@
         if (_preview is null) return;
         var ok = await _confirmDialog.ShowAsync($"Import {_preview.Count} rows?");
         if (!ok) return;
-        _result = await Importer.ImportAsync(_preview, _strategy, dryRun: false);
+        _result = await Importer.ImportAsync(_preview, dryRun: false);
         Notify.Success("Import complete.");
         _preview = null;
     }

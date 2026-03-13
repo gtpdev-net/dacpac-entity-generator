@@ -11,6 +11,7 @@ public class DacpacImportResult
     public int TablesProcessed { get; set; }
     public int ColumnsUpdated { get; set; }
     public int ColumnsCreated { get; set; }
+    public int ColumnsDeactivated { get; set; }
     public int ViewsImported { get; set; }
     public int StoredProceduresImported { get; set; }
     public int FunctionsImported { get; set; }

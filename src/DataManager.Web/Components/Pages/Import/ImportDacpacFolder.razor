@@ -45,6 +45,10 @@
                         <div class="col-auto"><span class="badge bg-secondary">Tables: @r.TablesProcessed</span></div>
                         <div class="col-auto"><span class="badge bg-primary">Cols updated: @r.ColumnsUpdated</span></div>
                         <div class="col-auto"><span class="badge bg-info text-dark">Cols created: @r.ColumnsCreated</span></div>
+                        @if (r.ColumnsDeactivated > 0)
+                        {
+                            <div class="col-auto"><span class="badge bg-danger">Cols deactivated: @r.ColumnsDeactivated</span></div>
+                        }
                         <div class="col-auto"><span class="badge bg-success">Views: @r.ViewsImported</span></div>
                         <div class="col-auto"><span class="badge bg-warning text-dark">Procs: @r.StoredProceduresImported</span></div>
                         <div class="col-auto"><span class="badge bg-warning text-dark">Functions: @r.FunctionsImported</span></div>

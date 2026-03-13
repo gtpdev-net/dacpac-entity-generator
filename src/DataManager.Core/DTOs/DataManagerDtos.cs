@@ -82,11 +82,10 @@ public class ImportPreviewRow
 
 public class ImportResultDto
 {
-    public int TablesAdded { get; set; }
-    public int ColumnsAdded { get; set; }
     public int ColumnsUpdated { get; set; }
-    public int ColumnsRemoved { get; set; }
-    public int ColumnsSkipped { get; set; }
+    public int ColumnsNotFound { get; set; }
+    public int TablesNotFound { get; set; }
+    public List<string> Warnings { get; set; } = new();
     public List<string> Errors { get; set; } = new();
 }
 

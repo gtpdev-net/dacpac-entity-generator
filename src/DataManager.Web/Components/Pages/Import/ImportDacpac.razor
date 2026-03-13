@@ -38,6 +38,10 @@
             <div class="col-auto"><span class="badge bg-secondary fs-6">Tables: @_result.TablesProcessed</span></div>
             <div class="col-auto"><span class="badge bg-primary fs-6">Cols updated: @_result.ColumnsUpdated</span></div>
             <div class="col-auto"><span class="badge bg-info text-dark fs-6">Cols created: @_result.ColumnsCreated</span></div>
+            @if (_result.ColumnsDeactivated > 0)
+            {
+                <div class="col-auto"><span class="badge bg-danger fs-6">Cols deactivated: @_result.ColumnsDeactivated</span></div>
+            }
             <div class="col-auto"><span class="badge bg-success fs-6">Views: @_result.ViewsImported</span></div>
             <div class="col-auto"><span class="badge bg-warning text-dark fs-6">Procs: @_result.StoredProceduresImported</span></div>
             <div class="col-auto"><span class="badge bg-warning text-dark fs-6">Functions: @_result.FunctionsImported</span></div>

@@ -240,6 +240,7 @@ public class DacpacSchemaImportService
                         toUpdate.Select(c => colMap[c.Name.ToUpperInvariant()]),
                         col =>
                         {
+                            col.IsActive = true; // reactivate if previously soft-deleted
                             if (colLookup.TryGetValue(col.ColumnName.ToUpperInvariant(), out var def))
                                 ApplySchemaMetadata(col, def);
                         });
@@ -252,11 +253,25 @@ public class DacpacSchemaImportService
                     {
                         TableId = tableId,
                         ColumnName = colDef.Name,
-                        SortOrder = tableDef.Columns.IndexOf(colDef)
+                        SortOrder = tableDef.Columns.IndexOf(colDef),
+                        IsActive = true
                     };
                     ApplySchemaMetadata(newCol, colDef);
                     await _repository.AddColumnAsync(newCol);
                     result.ColumnsCreated++;
+                }
+
+                // Soft-delete columns that are no longer present in the DACPAC (dropped from the schema).
+                var dacpacColNames = tableDef.Columns.Select(c => c.Name.ToUpperInvariant()).ToHashSet();
+                var toDeactivate = existingCols
+                    .Where(c => c.IsActive && !dacpacColNames.Contains(c.ColumnName.ToUpperInvariant()))
+                    .Select(c => c.ColumnId)
+                    .ToList();
+
+                if (toDeactivate.Count > 0)
+                {
+                    await _repository.BulkUpdateColumnsAsync(toDeactivate, col => col.IsActive = false);
+                    result.ColumnsDeactivated += toDeactivate.Count;
                 }
             }
 
@@ -415,7 +430,7 @@ public class DacpacSchemaImportService
             _logger.LogProgress(
                 $"Import complete for {serverName}/{databaseName}: " +
                 $"{result.TablesProcessed} tables, " +
-                $"{result.ColumnsUpdated} cols updated / {result.ColumnsCreated} cols created, " +
+                $"{result.ColumnsUpdated} cols updated / {result.ColumnsCreated} cols created / {result.ColumnsDeactivated} cols deactivated, " +
                 $"{result.ViewsImported} views, {result.StoredProceduresImported} procs, " +
                 $"{result.FunctionsImported} functions, {result.IndexesImported} indexes, " +
                 $"{result.TriggersImported} triggers");
